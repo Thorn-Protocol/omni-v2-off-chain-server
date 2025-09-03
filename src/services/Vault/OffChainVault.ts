@@ -5,6 +5,7 @@ import logger from "../../lib/winston";
 import StrategyInterface from "../../interfaces/StrategyInterface";
 import { OffChainStrategy__factory } from "../../typechain-types";
 import { ERC20__factory } from "../../typechain-types/factories/ERC20__factory";
+import { sleep } from "../../utils/helper";
 
 export default class OffChainVault {
   name: string;
@@ -145,7 +146,7 @@ export default class OffChainVault {
 
     let newPlan = await this.optimizeLiquidity(liquidity);
     console.log("plan", newPlan);
-
+    // withdraw from strategy to agent
     for (let i = 0; i < newPlan.data.length; i++) {
       let strategy = newPlan.data[i].strategy;
       let availableLiquidity = newPlan.data[i].availableLiquidity;
@@ -153,13 +154,19 @@ export default class OffChainVault {
       let minimumLiquidity = newPlan.data[i].minimumLiquidity;
       if (liquidity > availableLiquidity + minimumLiquidity) {
         let amountWithdraw = liquidity - availableLiquidity - minimumLiquidity;
-        logger.debug(`withdraw from ${strategy.name} amount: ${amountWithdraw}`);
-        await strategy.withdraw(amountWithdraw);
+        logger.debug(`${this.name}: withdraw from ${strategy.name} amount: ${amountWithdraw}`);
+        try {
+          await strategy.withdraw(amountWithdraw);
+        } catch {
+          logger.error(`${this.name}: withdraw from ${strategy.name} amount: ${amountWithdraw} failed`);
+        }
+        await sleep(2000);
       }
     }
 
     let remainLiquidity = await this.getBalanceAgent();
 
+    // deposit to strategy
     for (let i = 0; i < newPlan.data.length; i++) {
       let strategy = newPlan.data[i].strategy;
       let availableLiquidity = newPlan.data[i].availableLiquidity;
@@ -170,9 +177,15 @@ export default class OffChainVault {
         if (amountWithdraw > remainLiquidity) {
           amountWithdraw = remainLiquidity;
         }
-        logger.debug(`deposit to strategy ${strategy.name} amount ${amountWithdraw}`);
-        await strategy.deposit(amountWithdraw);
-        remainLiquidity -= amountWithdraw;
+        try {
+          logger.debug(`${this.name}: deposit to strategy ${strategy.name} amount ${amountWithdraw}`);
+          await strategy.deposit(amountWithdraw);
+        } catch (e) {
+          logger.error(`${this.name}: deposit to strategy ${strategy.name} amount: ${amountWithdraw} failed ${e}`);
+        }
+
+        await sleep(2000);
+        remainLiquidity = await this.getBalanceAgent();
       }
     }
   }

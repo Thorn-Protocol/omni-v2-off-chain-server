@@ -4,9 +4,9 @@ import TelegramLogger from "winston-telegram";
 import { TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID } from "../common/config/secrets";
 
 const logger = winston.createLogger({
-  level: "info",
+  level: "debug",
   format: winston.format.json(),
-  transports: [new winston.transports.Console(), new winston.transports.Console({ level: "debug" })], // console in cả debug],
+  transports: [new winston.transports.Console()], // console in cả debug],
 });
 
 let option: TelegramLogger.Options = {

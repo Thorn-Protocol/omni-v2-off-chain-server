@@ -12,7 +12,7 @@ import { ethers, formatUnits, JsonRpcProvider, parseUnits, Wallet, ZeroAddress }
 import StrategyInterface, { GetLiquidityAvailableAtAPYResponse } from "../../interfaces/StrategyInterface";
 import { RPC_URL_BASE } from "../../common/config/secrets";
 
-export class AerodromeMsusdUsdcOnBaseStrategy implements StrategyInterface {
+export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
   name: string = " Aedrome Finance msUSD-USDC Liquidity Strategy";
 
   minDebt: number = 0;
@@ -402,8 +402,8 @@ export class AerodromeMsusdUsdcOnBaseStrategy implements StrategyInterface {
   }
 
   public async getLiquidityAvailableAtAPY(targetAPY: number): Promise<GetLiquidityAvailableAtAPYResponse> {
-    let tvlDefillama = await getTVLFromDefillama(this.defillamaCode);
-    let apyDefillama = await getAPYFromDefillama(this.defillamaCode);
+    let tvlDefillama = await this.getAPY();
+    let apyDefillama = await this.getTVL();
     let reward = tvlDefillama * apyDefillama;
     const requiredTVL = reward / targetAPY;
     const deltaLiquidity = requiredTVL - tvlDefillama;
