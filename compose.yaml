@@ -1,0 +1,13 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: omni-v2-server
+    environment:
+      - USDC_BASE_V2_AGENT_KEY=${USDC_BASE_V2_AGENT_KEY}
+      - TEST_V2_AGENT_KEY=${TEST_V2_AGENT_KEY}
+      - IS_PRODUCT=true
+      - RPC_URL_BASE=${RPC_URL_BASE}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}

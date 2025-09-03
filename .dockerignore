@@ -1,0 +1,7 @@
+.env
+.gitignore
+.git
+thorn-omnifarming-rofl.default.orc
+/node_modules
+/dist
+/rofl
