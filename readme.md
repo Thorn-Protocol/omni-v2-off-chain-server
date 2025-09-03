@@ -14,8 +14,8 @@ Coming soon
 
 ## Strategies intergrated
 
-| Protocol        | Type                           | Test Vault | USDC V2 on Base |
-| --------------- | ------------------------------ | ---------- | --------------- |
-| Wasabi Finance  | Yield preps                    | ❌         | ❌              |
-| AAVE V3 Finance | Yield lending                  | ✅         | ❌              |
-| Aedrome Finance | msUSD - USDC liquidiy Strategy | ✅         | ❌              |
+| Protocol                                      | Type                           | Test Vault | USDC V2 on Base |
+| --------------------------------------------- | ------------------------------ | ---------- | --------------- |
+| [Wasabi Finance](https://wasabi.xyz/)         | Yield preps                    | ❌         | ❌              |
+| [AAVE V3 Finance](https://aave.com/)          | Yield lending                  | ✅         | ❌              |
+| [Aedrome Finance](https://aerodrome.finance/) | msUSD - USDC liquidiy Strategy | ✅         | ❌              |
