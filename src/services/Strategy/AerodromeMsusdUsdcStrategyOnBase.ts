@@ -115,6 +115,7 @@ export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
       await this.increaseLiquidity(position.tokenId, amount0, amount1);
     }
   }
+
   public async withdraw(amount: number) {
     try {
       let amountBigInt = parseUnits(amount.toFixed(this.decimalToken), this.decimalToken);
@@ -178,6 +179,7 @@ export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
       console.log(" Error withdraw", e);
     }
   }
+
   async getBalance(): Promise<number> {
     const positionManager = AerodromeNonfungiblePositionManager__factory.connect(this.NonfungiblePositionManager, this.provider);
     try {
@@ -189,6 +191,9 @@ export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
       let sqrtPriceLowerX96 = this.getSqrtRatioAtTick(position.tickLower);
       let sqrtPriceUpperX96 = this.getSqrtRatioAtTick(position.tickUpper);
       let { amount0Bigint, amount1Bigint } = await this.getAmounFromLiquidity(position.liquidity, sqrtPriceX96, sqrtPriceLowerX96, sqrtPriceUpperX96);
+      if (amount0Bigint == 0n && amount1Bigint == 0n) {
+        return 0;
+      }
       let quoter = AerodromeSlipstreamQuoter__factory.connect(this.quoter, this.provider);
       const path = ethers.solidityPacked(["address", "uint24", "address"], [this.msUsdAddress, 50, this.usdcAddress]);
       let data = await quoter.quoteExactInput.staticCall(path, amount0Bigint);
