@@ -412,8 +412,8 @@ export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
   }
 
   public async getLiquidityAvailableAtAPY(targetAPY: number): Promise<GetLiquidityAvailableAtAPYResponse> {
-    let tvlDefillama = await this.getAPY();
-    let apyDefillama = await this.getTVL();
+    let apyDefillama = await this.getAPY();
+    let tvlDefillama = await this.getTVL();
     let reward = tvlDefillama * apyDefillama;
     const requiredTVL = reward / targetAPY;
     const deltaLiquidity = requiredTVL - tvlDefillama;

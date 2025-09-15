@@ -69,7 +69,7 @@ export default class OffChainVault {
     // calculate best apr can provide with remain liquidity
     let minAPR = 0;
     let maxAPR = 100;
-
+    console.log("remain liquidity ", totalAsset - minimumLiquidity);
     while (minAPR < maxAPR - 0.001) {
       let datacache = [];
       let targetAPY = (minAPR + maxAPR) / 2;
@@ -96,9 +96,8 @@ export default class OffChainVault {
           break;
         }
       }
-      if (availableLiquidity > totalAsset && remainLiquiditity <= 0) {
+      if (availableLiquidity >= totalAsset - minimumLiquidity && remainLiquiditity <= 0) {
         minAPR = targetAPY;
-
         for (let i = 0; i < this.strategies.length; i++) {
           data[i].availableLiquidity = datacache[i].availableLiquidity;
         }
@@ -143,9 +142,9 @@ export default class OffChainVault {
     let liquidity = await this.getBalanceVault();
     logger.debug(`liquidity: ${liquidity}`);
     if (liquidity < 1) return;
-
     let newPlan = await this.optimizeLiquidity(liquidity);
     console.log("plan", newPlan);
+
     // withdraw from strategy to agent
     for (let i = 0; i < newPlan.data.length; i++) {
       let strategy = newPlan.data[i].strategy;

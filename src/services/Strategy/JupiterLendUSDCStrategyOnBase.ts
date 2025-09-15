@@ -16,6 +16,7 @@ import BN from "bn.js";
 import { AnchorProvider, Program, Wallet as WalletAnchor } from "@coral-xyz/anchor";
 
 import { getDepositPda, intToU8Array32 } from "@across-protocol/contracts/dist/src/svm/web3-v1";
+import { MIN_DEPOSIT_WITHDRAW } from "../../common/config/config";
 
 export class JupiterLendingUSDCOnBase implements StrategyInterface {
   name: string = "Jupiter Lending USDC On Base";
@@ -45,6 +46,7 @@ export class JupiterLendingUSDCOnBase implements StrategyInterface {
     this.provider = new JsonRpcProvider(RPC_URL_BASE);
     this.wallet = new Wallet(privateKey, this.provider);
     this.walletSolana = Keypair.fromSecretKey(bs58.decode(privateKeySolana));
+    logger.info(`${this.name}: constructor agent: ${this.walletSolana.publicKey} success`);
   }
 
   getName(): string {
@@ -54,7 +56,7 @@ export class JupiterLendingUSDCOnBase implements StrategyInterface {
   async getAPY(): Promise<number> {
     let now = getTimestampNow();
     if (this.apyUpdateTimestamp < now - 300) {
-      this.apy = 8.37; // todo write script crawl data
+      await this.updateData();
       this.apyUpdateTimestamp = now;
     }
     return this.apy;
@@ -63,7 +65,7 @@ export class JupiterLendingUSDCOnBase implements StrategyInterface {
   async getTVL(): Promise<number> {
     let now = getTimestampNow();
     if (this.tvlUpdateTimestamp < now - 300) {
-      this.tvl = 303_000_000; // todo write script crawl data
+      await this.updateData();
       this.tvlUpdateTimestamp = now;
     }
     return this.tvl;
@@ -80,7 +82,7 @@ export class JupiterLendingUSDCOnBase implements StrategyInterface {
     };
   }
   async getBalance(): Promise<number> {
-    return 0; // todo crawl balance
+    return Number(ethers.formatUnits(await this.getPositions(), this.tokenOnSolanaDecimals));
   }
 
   async getMinimumLiquidity(): Promise<number> {
@@ -88,16 +90,24 @@ export class JupiterLendingUSDCOnBase implements StrategyInterface {
   }
 
   async deposit(amount: number): Promise<void> {
+    if (amount < MIN_DEPOSIT_WITHDRAW) {
+      logger.info(" amount is less than 0.1, skipping");
+      return;
+    }
     // bridge through across
     await this.bridgeToSolana(amount);
-    await this.depositAllToJupiter();
     // deposit to jup lend
+    await this.depositAllToJupiter();
   }
 
   async withdraw(amount: number): Promise<void> {
+    if (amount < MIN_DEPOSIT_WITHDRAW) {
+      logger.info(" amount is less than 0.1, skipping");
+      return;
+    }
     // withdraw from jup lend
-    // bridge throudh across
     let amountWithdrawn = await this.withdrawFromJupiter(amount);
+    // bridge throudh across
     await this.bridgeToBase(amountWithdrawn);
   }
 
@@ -263,7 +273,7 @@ export class JupiterLendingUSDCOnBase implements StrategyInterface {
     let fillDeadline = data.fillDeadline;
     let exclusivityParameter = 0;
     let message = "";
-    let usdcContract = ERC20__factory.connect(this.token, this.provider);
+    let usdcContract = ERC20__factory.connect(this.token, this.wallet);
     let allownace = await usdcContract.allowance(this.wallet.address, this.baseSpokePoolProxy);
     if (allownace < amountBigInt) {
       let txApprove = await usdcContract.approve(this.baseSpokePoolProxy, amountBigInt);
@@ -382,6 +392,23 @@ export class JupiterLendingUSDCOnBase implements StrategyInterface {
     return data;
   }
 
+  async getPositions() {
+    try {
+      const { data } = await axios.get("https://lite-api.jup.ag/lend/v1/earn/positions", {
+        params: {
+          users: [this.walletSolana.publicKey],
+        },
+      });
+      let dataToken = data.find((item: any) => item.token.symbol === "jlUSDC");
+      if (dataToken) {
+        return BigInt(dataToken.underlyingAssets);
+      } else return 0;
+    } catch (e) {
+      console.log(e);
+      throw new Error(" Error when get positions " + e);
+    }
+  }
+
   async getDepositTransaction(amount: bigint) {
     try {
       const { data } = await axios.post(
@@ -433,6 +460,26 @@ export class JupiterLendingUSDCOnBase implements StrategyInterface {
     const buf = Buffer.alloc(32);
     Buffer.from(hex, "hex").copy(buf, 12); // right-align, zero-pad left 12 bytes
     return new PublicKey(buf);
+  }
+
+  async updateData() {
+    try {
+      const { data } = await axios.get("https://lite-api.jup.ag/lend/v1/earn/positions", {
+        params: {
+          users: [this.walletSolana.publicKey],
+        },
+      });
+      let dataToken = data.find((item: any) => item.token.symbol === "jlUSDC");
+      if (dataToken) {
+        this.tvl = Number(ethers.formatUnits(dataToken.token.totalAssets, this.tokenOnSolanaDecimals));
+        this.apy = Number(dataToken.token.totalRate) / 100;
+        this.apyUpdateTimestamp = getTimestampNow();
+        this.tvlUpdateTimestamp = getTimestampNow();
+      } else return 0;
+    } catch (e) {
+      console.log(e);
+      throw new Error(" Error when get positions " + e);
+    }
   }
 
   async test() {}
