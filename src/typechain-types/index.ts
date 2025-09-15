@@ -3,6 +3,8 @@
 /* eslint-disable */
 import type * as aaveV3 from "./AaveV3";
 export type { aaveV3 };
+import type * as across from "./Across";
+export type { across };
 import type * as aerodromeSlip from "./AerodromeSlip";
 export type { aerodromeSlip };
 import type * as offchainStrategy from "./OffchainStrategy";
@@ -10,6 +12,8 @@ export type { offchainStrategy };
 export * as factories from "./factories";
 export type { PoolProxyBase } from "./AaveV3/PoolProxyBase";
 export { PoolProxyBase__factory } from "./factories/AaveV3/PoolProxyBase__factory";
+export type { AcrossSpokePoolProxy } from "./Across/AcrossSpokePoolProxy";
+export { AcrossSpokePoolProxy__factory } from "./factories/Across/AcrossSpokePoolProxy__factory";
 export type { AerodromeCLGauge } from "./AerodromeSlip/AerodromeCLGauge";
 export { AerodromeCLGauge__factory } from "./factories/AerodromeSlip/AerodromeCLGauge__factory";
 export type { AerodromeFactory } from "./AerodromeSlip/AerodromeFactory";

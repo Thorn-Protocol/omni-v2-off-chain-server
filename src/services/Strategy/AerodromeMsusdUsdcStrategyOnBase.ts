@@ -11,6 +11,7 @@ import { getAPYFromDefillama, getTVLFromDefillama } from "../DataService/DataSer
 import { ethers, formatUnits, JsonRpcProvider, parseUnits, Wallet, ZeroAddress } from "ethers";
 import StrategyInterface, { GetLiquidityAvailableAtAPYResponse } from "../../interfaces/StrategyInterface";
 import { RPC_URL_BASE } from "../../common/config/secrets";
+import { MIN_DEPOSIT_WITHDRAW } from "../../common/config/config";
 
 export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
   name: string = " Aedrome Finance msUSD-USDC Liquidity Strategy";
@@ -73,7 +74,7 @@ export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
   }
 
   public async deposit(amount: number) {
-    if (amount < 0.01) {
+    if (amount < MIN_DEPOSIT_WITHDRAW) {
       logger.info(" amount is less than 0.1, skipping");
       return;
     }
@@ -117,6 +118,10 @@ export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
   }
 
   public async withdraw(amount: number) {
+    if (amount < MIN_DEPOSIT_WITHDRAW) {
+      logger.info(" amount is less than 0.1, skipping");
+      return;
+    }
     try {
       let amountBigInt = parseUnits(amount.toFixed(this.decimalToken), this.decimalToken);
       let position = await this.getPosition();

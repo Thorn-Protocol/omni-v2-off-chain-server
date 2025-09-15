@@ -2,5 +2,6 @@
 /* tslint:disable */
 /* eslint-disable */
 export * as aaveV3 from "./AaveV3";
+export * as across from "./Across";
 export * as aerodromeSlip from "./AerodromeSlip";
 export * as offchainStrategy from "./OffchainStrategy";

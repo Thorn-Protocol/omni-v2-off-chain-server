@@ -5,9 +5,8 @@ import { getAPYFromDefillama, getTVLFromDefillama } from "../DataService/DataSer
 import { RPC_URL_BASE } from "../../common/config/secrets";
 import { PoolProxyBase, PoolProxyBase__factory } from "../../typechain-types";
 import logger from "../../lib/winston";
-import { addresses } from "../../common/config/config";
 import { ERC20__factory } from "../../typechain-types/factories/ERC20__factory";
-import { log } from "winston";
+import { MIN_DEPOSIT_WITHDRAW } from "../../common/config/config";
 
 export class AaveV3UsdcStrategyOnBase implements StrategyInterface {
   name: string = "AAVE V3 USDC Strategy On Base";
@@ -76,7 +75,7 @@ export class AaveV3UsdcStrategyOnBase implements StrategyInterface {
   }
 
   async deposit(amount: number): Promise<void> {
-    if (amount < 0.01) {
+    if (amount < MIN_DEPOSIT_WITHDRAW) {
       logger.info(`${this.name}: amount is less than 0.01, skipping`);
       return;
     }
@@ -94,7 +93,7 @@ export class AaveV3UsdcStrategyOnBase implements StrategyInterface {
     logger.info(`${this.name}: deposit success ${receipt?.hash}`);
   }
   async withdraw(amount: number): Promise<void> {
-    if (amount < 0.01) {
+    if (amount < MIN_DEPOSIT_WITHDRAW) {
       logger.info(`${this.name}: amount is less than 0.01, skipping`);
       return;
     }

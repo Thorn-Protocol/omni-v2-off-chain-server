@@ -1,5 +1,7 @@
 export const INTERVAL_TIME_REBALANCE = 6 * 60 * 60 * 1000; // 6 hours
 
+export const MIN_DEPOSIT_WITHDRAW = 1;
+
 export const addresses = {
   test_vault: {
     vault: "0x3eBBA4De3ff7221aaFd3863318C96E9f4dbCfBDE",
