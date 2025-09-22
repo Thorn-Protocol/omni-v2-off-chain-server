@@ -64,11 +64,13 @@ export interface OffChainStrategyInterface extends Interface {
 
   getEvent(
     nameOrSignatureOrTopic:
+      | "AgentChanged"
       | "AgentDeposit"
       | "AgentWithdraw"
       | "Approval"
       | "AssetUpdated"
       | "Deposit"
+      | "GovernanceChanged"
       | "Transfer"
       | "Withdraw"
   ): EventFragment;
@@ -182,7 +184,7 @@ export interface OffChainStrategyInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "updateDebt",
-    values: [BigNumberish]
+    values: [BigNumberish, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "withdraw",
@@ -265,6 +267,18 @@ export interface OffChainStrategyInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "updateDebt", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "withdraw", data: BytesLike): Result;
+}
+
+export namespace AgentChangedEvent {
+  export type InputTuple = [newAgent: AddressLike];
+  export type OutputTuple = [newAgent: string];
+  export interface OutputObject {
+    newAgent: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export namespace AgentDepositEvent {
@@ -360,6 +374,18 @@ export namespace DepositEvent {
     owner: string;
     assets: bigint;
     shares: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace GovernanceChangedEvent {
+  export type InputTuple = [newGovernance: AddressLike];
+  export type OutputTuple = [newGovernance: string];
+  export interface OutputObject {
+    newGovernance: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -498,10 +524,14 @@ export interface OffChainStrategy extends BaseContract {
    */
   balanceOf: TypedContractMethod<[account: AddressLike], [bigint], "view">;
 
-  changeAgent: TypedContractMethod<[_agent: AddressLike], [void], "nonpayable">;
+  changeAgent: TypedContractMethod<
+    [newAgent: AddressLike],
+    [void],
+    "nonpayable"
+  >;
 
   changeGovernance: TypedContractMethod<
-    [_governance: AddressLike],
+    [newGovernance: AddressLike],
     [void],
     "nonpayable"
   >;
@@ -645,7 +675,7 @@ export interface OffChainStrategy extends BaseContract {
   >;
 
   updateDebt: TypedContractMethod<
-    [_totalDebt: BigNumberish],
+    [profit: BigNumberish, loss: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -694,10 +724,10 @@ export interface OffChainStrategy extends BaseContract {
   ): TypedContractMethod<[account: AddressLike], [bigint], "view">;
   getFunction(
     nameOrSignature: "changeAgent"
-  ): TypedContractMethod<[_agent: AddressLike], [void], "nonpayable">;
+  ): TypedContractMethod<[newAgent: AddressLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "changeGovernance"
-  ): TypedContractMethod<[_governance: AddressLike], [void], "nonpayable">;
+  ): TypedContractMethod<[newGovernance: AddressLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "convertToAssets"
   ): TypedContractMethod<[shares: BigNumberish], [bigint], "view">;
@@ -789,7 +819,11 @@ export interface OffChainStrategy extends BaseContract {
   >;
   getFunction(
     nameOrSignature: "updateDebt"
-  ): TypedContractMethod<[_totalDebt: BigNumberish], [void], "nonpayable">;
+  ): TypedContractMethod<
+    [profit: BigNumberish, loss: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "withdraw"
   ): TypedContractMethod<
@@ -798,6 +832,13 @@ export interface OffChainStrategy extends BaseContract {
     "nonpayable"
   >;
 
+  getEvent(
+    key: "AgentChanged"
+  ): TypedContractEvent<
+    AgentChangedEvent.InputTuple,
+    AgentChangedEvent.OutputTuple,
+    AgentChangedEvent.OutputObject
+  >;
   getEvent(
     key: "AgentDeposit"
   ): TypedContractEvent<
@@ -834,6 +875,13 @@ export interface OffChainStrategy extends BaseContract {
     DepositEvent.OutputObject
   >;
   getEvent(
+    key: "GovernanceChanged"
+  ): TypedContractEvent<
+    GovernanceChangedEvent.InputTuple,
+    GovernanceChangedEvent.OutputTuple,
+    GovernanceChangedEvent.OutputObject
+  >;
+  getEvent(
     key: "Transfer"
   ): TypedContractEvent<
     TransferEvent.InputTuple,
@@ -849,6 +897,17 @@ export interface OffChainStrategy extends BaseContract {
   >;
 
   filters: {
+    "AgentChanged(address)": TypedContractEvent<
+      AgentChangedEvent.InputTuple,
+      AgentChangedEvent.OutputTuple,
+      AgentChangedEvent.OutputObject
+    >;
+    AgentChanged: TypedContractEvent<
+      AgentChangedEvent.InputTuple,
+      AgentChangedEvent.OutputTuple,
+      AgentChangedEvent.OutputObject
+    >;
+
     "AgentDeposit(uint256,uint256,uint256)": TypedContractEvent<
       AgentDepositEvent.InputTuple,
       AgentDepositEvent.OutputTuple,
@@ -902,6 +961,17 @@ export interface OffChainStrategy extends BaseContract {
       DepositEvent.InputTuple,
       DepositEvent.OutputTuple,
       DepositEvent.OutputObject
+    >;
+
+    "GovernanceChanged(address)": TypedContractEvent<
+      GovernanceChangedEvent.InputTuple,
+      GovernanceChangedEvent.OutputTuple,
+      GovernanceChangedEvent.OutputObject
+    >;
+    GovernanceChanged: TypedContractEvent<
+      GovernanceChangedEvent.InputTuple,
+      GovernanceChangedEvent.OutputTuple,
+      GovernanceChangedEvent.OutputObject
     >;
 
     "Transfer(address,address,uint256)": TypedContractEvent<

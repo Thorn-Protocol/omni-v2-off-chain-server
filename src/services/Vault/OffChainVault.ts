@@ -48,9 +48,38 @@ export default class OffChainVault {
 
   /**
    * Generate and return vault performance report
-   * Currently not implemented
+   * Update debt to the vault
    */
-  async report() {}
+  async report() {
+    try {
+      let totalDebt = await this.vault.totalDebt();
+
+      let realDebt = 0;
+
+      for (let i = 0; i < this.strategies.length; i++) {
+        realDebt += await this.strategies[i].getBalance();
+      }
+
+      realDebt += await this.getBalanceAgent();
+      let realDebtBigInt = parseUnits(realDebt.toString(), this.tokenDecimal);
+
+      let profit = 0n;
+      let loss = 0n;
+
+      if (realDebtBigInt > totalDebt) {
+        profit = realDebtBigInt - totalDebt;
+      } else {
+        loss = totalDebt - realDebtBigInt;
+      }
+      let tx = await this.vault.updateDebt(profit, loss);
+      let receipt = await tx.wait();
+      logger.info(`update debt ${receipt!.hash}`);
+      return { profit, loss };
+    } catch (e) {
+      logger.error(`report error ${e}`);
+      return { profit: 0n, loss: 0n };
+    }
+  }
 
   /**
    * Enable the agent for vault operations
@@ -184,6 +213,7 @@ export default class OffChainVault {
    * 2. Calculates optimal liquidity allocation
    * 3. Withdraws excess liquidity from over-allocated strategies
    * 4. Deposits available liquidity to under-allocated strategies
+   * 5. Update debt to the vault
    */
   async rebalanceStrategies() {
     await this.withdrawIdleFunds();
@@ -229,6 +259,8 @@ export default class OffChainVault {
         remainLiquidity = await this.getBalanceAgent();
       }
     }
+
+    await this.report();
   }
 
   /**
