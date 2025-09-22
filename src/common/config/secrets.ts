@@ -4,6 +4,8 @@ dotenv.config();
 
 export const isProduction = process.env.IS_PRODUCT == "true";
 
+export const isInRoflEnvironmental = process.env.IS_IN_ROFL == "true";
+
 export const TEST_EVM_KEY = process.env.TEST_EVM_KEY ?? "7d6a5738f79262075f5df2597cb5a370916b55d3786abf37359e1baf62337ab3"; // random private key
 export const TEST_SOLANA_KEY = process.env.TEST_SOLANA_KEY ?? "7d6a5738f79262075f5df2597cb5a370916b55d3786abf37359e1baf62337ab3"; // random private key
 export const TEST_V2_AGENT_KEY = process.env.TEST_V2_AGENT_KEY ?? "7d6a5738f79262075f5df2597cb5a370916b55d3786abf37359e1baf62337ab3"; // random private key

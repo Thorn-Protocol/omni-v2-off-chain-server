@@ -1,51 +1,115 @@
-import { AerodromeNonfungiblePositionManager__factory } from "../../typechain-types/factories/AerodromeNonfungiblePositionManager__factory";
-
-import logger from "../../lib/winston";
-import { error, log } from "winston";
-import { ErrorInfo } from "ethers/lib.commonjs/utils/errors";
+// External imports
 import { BigNumber } from "bignumber.js";
-import { AerodromeCLGauge__factory, AerodromePool__factory, AerodromeSlipRouter__factory, AerodromeSlipstreamQuoter__factory } from "../../typechain-types";
-import { ERC20__factory } from "../../typechain-types/factories/ERC20__factory";
+import { ethers, formatUnits, JsonRpcProvider, parseUnits, Wallet, TransactionReceipt } from "ethers";
+
+// Internal imports
+import logger from "../../lib/winston";
 import { getTimestampNow, sleep } from "../../utils/helper";
 import { getAPYFromDefillama, getTVLFromDefillama } from "../DataService/DataService";
-import { ethers, formatUnits, JsonRpcProvider, parseUnits, Wallet, ZeroAddress } from "ethers";
 import StrategyInterface, { GetLiquidityAvailableAtAPYResponse } from "../../interfaces/StrategyInterface";
 import { RPC_URL_BASE } from "../../common/config/secrets";
 import { MIN_DEPOSIT_WITHDRAW } from "../../common/config/config";
 
-export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
-  name: string = " Aedrome Finance msUSD-USDC Liquidity Strategy";
+// Typechain imports
+import { AerodromeNonfungiblePositionManager__factory } from "../../typechain-types/factories/AerodromeNonfungiblePositionManager__factory";
+import { AerodromePool__factory, AerodromeSlipRouter__factory, AerodromeSlipstreamQuoter__factory } from "../../typechain-types";
+import { ERC20__factory } from "../../typechain-types/factories/ERC20__factory";
 
+// Constants
+const APY_CACHE_DURATION = 300; // 5 minutes
+const DEFAULT_DEADLINE_BUFFER = 3600; // 1 hour
+const SWAP_DEADLINE_BUFFER = 360; // 6 minutes
+const SLEEP_DURATION = 2000; // 2 seconds
+const TICK_SPACING = 50;
+const MAX_UINT128 = 340282366920938463463374607431768211455n;
+const DEFAULT_LOWER_TICK = -276400n;
+const DEFAULT_UPPER_TICK = -276250n;
+
+// Contract addresses
+const CONTRACT_ADDRESSES = {
+  NONFUNGIBLE_POSITION_MANAGER: "0x827922686190790b37229fd06084350e74485b72",
+  USDC: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  MS_USD: "0x526728DBc96689597F85ae4cd716d4f7fCcBAE9d",
+  POOL: "0x7501bc8Bb51616F79bfA524E464fb7B41f0B10fB",
+  ROUTER: "0xBE6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
+  QUOTER: "0x254cF9E1E6e233aa1AC962CB9B05b2cfeAaE15b0",
+  STAKING: "0x3d86aed6ecc8daf71c8b50d06f38455b663265d8",
+} as const;
+
+// Token decimals
+const TOKEN_DECIMALS = {
+  TOKEN0: 18,
+  TOKEN1: 6,
+} as const;
+
+// External service codes
+const DEFILLAMA_CODE = "aae6cc3a-783b-4a76-bea7-c3edccd28d62";
+
+// Types and interfaces
+interface Position {
+  havePosition: boolean;
+  tokenId: bigint;
+  tickLower: number;
+  tickUpper: number;
+  liquidity: bigint;
+}
+
+interface TokenBalance {
+  balanceToken0: bigint;
+  balanceToken1: bigint;
+}
+
+interface SwapAmounts {
+  amountSwap: number;
+  amountToken0After: number;
+  amountToken1After: number;
+}
+
+interface TickRange {
+  lowerTick: bigint;
+  upperTick: bigint;
+}
+
+interface LiquidityAmounts {
+  amount0Bigint: bigint;
+  amount1Bigint: bigint;
+}
+
+export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
+  // Strategy properties
+  name: string = "Aerodrome Finance msUSD-USDC Liquidity Strategy";
   minDebt: number = 0;
   maxDebt: number = 0;
 
-  // Additional constants
-  NonfungiblePositionManager: string = "0x827922686190790b37229fd06084350e74485b72";
-  usdcAddress: string = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-  msUsdAddress: string = "0x526728DBc96689597F85ae4cd716d4f7fCcBAE9d";
-  poolAddress: string = "0xCEFc8B799A8ee5D9b312aecA73262645D664AAf7"; // msUSD/USDC pool address on
-  factory: string = "0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A";
-  pool: string = "0x7501bc8Bb51616F79bfA524E464fb7B41f0B10fB";
-  router: string = "0xBE6D8f0d05cC4be24d5167a3eF062215bE6D18a5";
-  quoter: string = "0x254cF9E1E6e233aa1AC962CB9B05b2cfeAaE15b0";
-  staking: string = "0x3d86aed6ecc8daf71c8b50d06f38455b663265d8";
+  // Contract addresses
+  private readonly nonfungiblePositionManager: string = CONTRACT_ADDRESSES.NONFUNGIBLE_POSITION_MANAGER;
+  private readonly usdcAddress: string = CONTRACT_ADDRESSES.USDC;
+  private readonly msUsdAddress: string = CONTRACT_ADDRESSES.MS_USD;
+  private readonly pool: string = CONTRACT_ADDRESSES.POOL;
+  private readonly router: string = CONTRACT_ADDRESSES.ROUTER;
+  private readonly quoter: string = CONTRACT_ADDRESSES.QUOTER;
+  private readonly staking: string = CONTRACT_ADDRESSES.STAKING;
 
-  provider: JsonRpcProvider;
-  wallet: Wallet;
-  decimalToken0: number = 18;
-  decimalToken1: number = 6;
+  // Token configuration
+  private readonly token0: string = CONTRACT_ADDRESSES.MS_USD;
+  private readonly token1: string = CONTRACT_ADDRESSES.USDC;
+  private readonly token: string = CONTRACT_ADDRESSES.USDC;
+  private readonly decimalToken0: number = TOKEN_DECIMALS.TOKEN0;
+  private readonly decimalToken1: number = TOKEN_DECIMALS.TOKEN1;
+  private readonly decimalToken: number = TOKEN_DECIMALS.TOKEN1;
 
-  token: string = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-  decimalToken: number = 6;
+  // External service configuration
+  private readonly defillamaCode: string = DEFILLAMA_CODE;
 
-  token0: string = "0x526728DBc96689597F85ae4cd716d4f7fCcBAE9d";
-  token1: string = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+  // Cached data
+  private apy: number = 0;
+  private tvl: number = 0;
+  private apyUpdateTimestamp: number = 0;
+  private tvlUpdateTimestamp: number = 0;
 
-  defillamaCode: string = "aae6cc3a-783b-4a76-bea7-c3edccd28d62";
-  apy: number = 0;
-  tvl: number = 0;
-  apyUpdateTimestamp: number = 0;
-  tvlUpdateTimestamp: number = 0;
+  // Provider and wallet
+  private readonly provider: JsonRpcProvider;
+  private readonly wallet: Wallet;
   constructor(privateKey: string, minDebt: number = 0, maxDebt: number = 1_000_000) {
     this.provider = new JsonRpcProvider(RPC_URL_BASE);
     this.wallet = new Wallet(privateKey, this.provider);
@@ -56,177 +120,183 @@ export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
   getName(): string {
     return this.name;
   }
+  /**
+   * Get current APY from DeFiLlama with caching
+   * @returns Promise<number> Current APY percentage
+   */
   async getAPY(): Promise<number> {
-    let now = getTimestampNow();
-    if (this.apyUpdateTimestamp < now - 300) {
-      this.apy = await getAPYFromDefillama(this.defillamaCode);
-      this.apyUpdateTimestamp = now;
+    const now = getTimestampNow();
+    if (this.apyUpdateTimestamp < now - APY_CACHE_DURATION) {
+      try {
+        this.apy = await getAPYFromDefillama(this.defillamaCode);
+        this.apyUpdateTimestamp = now;
+        logger.info(`APY updated: ${this.apy}%`);
+      } catch (error) {
+        logger.error("Failed to fetch APY from DeFiLlama:", error);
+        throw new Error(`Failed to fetch APY: ${error instanceof Error ? error.message : "Unknown error"}`);
+      }
     }
     return this.apy;
   }
+  /**
+   * Get current TVL from DeFiLlama with caching
+   * @returns Promise<number> Current TVL in USD
+   */
   async getTVL(): Promise<number> {
-    let now = getTimestampNow();
-    if (this.tvlUpdateTimestamp < now - 300) {
-      this.tvl = await getTVLFromDefillama(this.defillamaCode);
-      this.tvlUpdateTimestamp = now;
+    const now = getTimestampNow();
+    if (this.tvlUpdateTimestamp < now - APY_CACHE_DURATION) {
+      try {
+        this.tvl = await getTVLFromDefillama(this.defillamaCode);
+        this.tvlUpdateTimestamp = now;
+        logger.info(`TVL updated: $${this.tvl.toLocaleString()}`);
+      } catch (error) {
+        logger.error("Failed to fetch TVL from DeFiLlama:", error);
+        throw new Error(`Failed to fetch TVL: ${error instanceof Error ? error.message : "Unknown error"}`);
+      }
     }
     return this.tvl;
   }
 
-  public async deposit(amount: number) {
+  /**
+   * Deposit tokens into the liquidity position
+   * @param amount Amount to deposit
+   */
+  public async deposit(amount: number): Promise<void> {
     if (amount < MIN_DEPOSIT_WITHDRAW) {
-      logger.info(" amount is less than 0.1, skipping");
-      return;
-    }
-    let amountBigInt = parseUnits(amount.toFixed(this.decimalToken), this.decimalToken);
-    let position = await this.getPosition();
-    console.log(" position ", position);
-
-    // If no position exists, create one first
-    if (!position.havePosition) {
-      console.log("No position found, creating new position...");
-      await this.createPosition(amount);
-      // Get the newly created position
-      position = await this.getPosition();
-      console.log("New position created:", position);
+      logger.info(`Amount ${amount} is less than minimum ${MIN_DEPOSIT_WITHDRAW}, skipping deposit`);
       return;
     }
 
-    let amountSwap = await this.getAmountSwapDeposit(amount, Number(position.tickLower), Number(position.tickUpper));
-    console.log(" amountswap ", amountSwap);
-
-    if (this.token == this.token0) {
-      let balancePre = await this.getBalanceToken();
-      if (balancePre.balanceToken0 < amountBigInt) throw Error(`Balance token0 ${this.token0} is less than amount ${amountBigInt}`);
-      await this.swap(BigInt(amountSwap.amountSwap.toFixed(0)), true);
-      await sleep(2000);
-      let balancePost = await this.getBalanceToken();
-
-      let amount0 = balancePre.balanceToken0 - balancePost.balanceToken0;
-      let amount1 = balancePost.balanceToken1 - balancePre.balanceToken1;
-      await this.increaseLiquidity(position.tokenId, amount0, amount1);
-    } else {
-      let balancePre = await this.getBalanceToken();
-      if (balancePre.balanceToken1 < amountBigInt) throw Error(`Balance token is less than amount ${amountBigInt}`);
-      await this.swap(BigInt(amountSwap.amountSwap.toFixed(0)), false);
-      await sleep(2000);
-      let balancePost = await this.getBalanceToken();
-      let amount0 = balancePost.balanceToken0 - balancePre.balanceToken0;
-      let amount1 = balancePre.balanceToken1 - balancePost.balanceToken1;
-      await this.increaseLiquidity(position.tokenId, amount0, amount1);
-    }
-  }
-
-  public async withdraw(amount: number) {
-    if (amount < MIN_DEPOSIT_WITHDRAW) {
-      logger.info(" amount is less than 0.1, skipping");
-      return;
-    }
     try {
-      let amountBigInt = parseUnits(amount.toFixed(this.decimalToken), this.decimalToken);
+      const amountBigInt = parseUnits(amount.toFixed(this.decimalToken), this.decimalToken);
       let position = await this.getPosition();
-      console.log(" position ", position);
-      let total = await this.getBalance();
-      if (total < amount) throw new Error(`Insufficient balance: ${total} < ${amount}`);
-      let fraction = amount / total;
+      logger.info("Current position:", position);
 
-      let liquidityToWithdraw = BigInt(Math.floor(fraction * Number(position.liquidity)));
-      if (liquidityToWithdraw === 0n) {
-        console.log("Liquidity to withdraw is 0, skipping");
+      // If no position exists, create one first
+      if (!position.havePosition) {
+        logger.info("No position found, creating new position...");
+        await this.createPosition(amount);
+        position = await this.getPosition();
+        logger.info("New position created:", position);
         return;
       }
-      const positionManager = AerodromeNonfungiblePositionManager__factory.connect(this.NonfungiblePositionManager, this.wallet);
-      const deadline = Math.floor(Date.now() / 1000) + 3600;
-      const decreaseParams = {
-        tokenId: position.tokenId,
-        liquidity: liquidityToWithdraw,
-        amount0Min: 0n,
-        amount1Min: 0n,
-        deadline,
-      };
 
-      let [expectedAmount0, expectedAmount1] = await positionManager.decreaseLiquidity.staticCall(decreaseParams);
-      console.log(`Expected amounts from decrease: amount0=${expectedAmount0}, amount1=${expectedAmount1}`);
+      const amountSwap = await this.getAmountSwapDeposit(amount, position.tickLower, position.tickUpper);
+      logger.info("Swap amounts calculated:", amountSwap);
 
-      let txDecrease = await positionManager.decreaseLiquidity(decreaseParams);
-      let receiptDecrease = await txDecrease.wait();
-      console.log("Decrease liquidity success", receiptDecrease?.hash);
-      await sleep(1000);
-      let balancePre = await this.getBalanceToken();
-      await sleep(1000);
-      let collectParams = {
-        tokenId: position.tokenId,
-        recipient: this.wallet.address,
-        amount0Max: 340282366920938463463374607431768211455n, // maxUnit128
-        amount1Max: 340282366920938463463374607431768211455n, // maxUnit128
-      };
-      let txCollect = await positionManager.collect(collectParams);
-      let receiptCollect = await txCollect.wait();
-      console.log("Collect success", receiptCollect?.hash);
-      await sleep(1000);
-      let balancePost = await this.getBalanceToken();
-      let amount0Received = balancePost.balanceToken0 - balancePre.balanceToken0;
-      let amount1Received = balancePost.balanceToken1 - balancePre.balanceToken1;
-      console.log(`Received amounts: amount0=${amount0Received}, amount1=${amount1Received}`);
-
-      if (this.token == this.token0) {
-        // Want to withdraw to token0: swap token1 (amount1Received) to token0
-        if (amount1Received > 0n) {
-          await this.swap(amount1Received, false); // false: token1 to token0
-        }
+      if (this.token === this.token0) {
+        await this.depositToken0(amountBigInt, amountSwap, position);
       } else {
-        // Want to withdraw to token1: swap token0 (amount0Received) to token1
-        if (amount0Received > 0n) {
-          await this.swap(amount0Received, true); // true: token0 to token1
-        }
+        await this.depositToken1(amountBigInt, amountSwap, position);
       }
-    } catch (e) {
-      console.log(" Error withdraw", e);
+    } catch (error) {
+      logger.error("Deposit failed:", error);
+      throw new Error(`Deposit failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }
 
-  async getBalance(): Promise<number> {
-    const positionManager = AerodromeNonfungiblePositionManager__factory.connect(this.NonfungiblePositionManager, this.provider);
+  /**
+   * Withdraw tokens from the liquidity position
+   * @param amount Amount to withdraw
+   */
+  public async withdraw(amount: number): Promise<void> {
+    if (amount < MIN_DEPOSIT_WITHDRAW) {
+      logger.info(`Amount ${amount} is less than minimum ${MIN_DEPOSIT_WITHDRAW}, skipping withdraw`);
+      return;
+    }
+
     try {
-      let positionId = await positionManager.tokenOfOwnerByIndex(this.wallet.address, 0);
-      let position = await positionManager.positions(positionId);
-      let pool = AerodromePool__factory.connect(this.pool, this.provider);
-      let slot0 = await pool.slot0();
-      let sqrtPriceX96 = new BigNumber(slot0.sqrtPriceX96.toString());
-      let sqrtPriceLowerX96 = this.getSqrtRatioAtTick(position.tickLower);
-      let sqrtPriceUpperX96 = this.getSqrtRatioAtTick(position.tickUpper);
-      let { amount0Bigint, amount1Bigint } = await this.getAmounFromLiquidity(position.liquidity, sqrtPriceX96, sqrtPriceLowerX96, sqrtPriceUpperX96);
-      if (amount0Bigint == 0n && amount1Bigint == 0n) {
-        return 0;
+      const amountBigInt = parseUnits(amount.toFixed(this.decimalToken), this.decimalToken);
+      const position = await this.getPosition();
+      logger.info("Current position:", position);
+
+      const total = await this.getBalance();
+      if (total < amount) {
+        throw new Error(`Insufficient balance: ${total} < ${amount}`);
       }
-      let quoter = AerodromeSlipstreamQuoter__factory.connect(this.quoter, this.provider);
-      const path = ethers.solidityPacked(["address", "uint24", "address"], [this.msUsdAddress, 50, this.usdcAddress]);
-      let data = await quoter.quoteExactInput.staticCall(path, amount0Bigint);
-      let totalAmountUSDCBigInt = data[0] + amount1Bigint;
-      let result = Number(formatUnits(totalAmountUSDCBigInt, 6));
-      return result;
-    } catch (e: any) {
-      if (e.message.includes("out of bound")) {
-        return 0;
+
+      const fraction = amount / total;
+      const liquidityToWithdraw = BigInt(Math.floor(fraction * Number(position.liquidity)));
+
+      if (liquidityToWithdraw === 0n) {
+        logger.info("Liquidity to withdraw is 0, skipping");
+        return;
       }
-      logger.error(e);
-      throw e;
+
+      // Decrease liquidity
+      await this.decreaseLiquidity(position, liquidityToWithdraw);
+
+      // Collect tokens
+      const { amount0Received, amount1Received } = await this.collectTokens(position);
+
+      // Swap tokens to desired output token
+      await this.swapWithdrawnTokens(amount0Received, amount1Received);
+    } catch (error) {
+      logger.error("Withdraw failed:", error);
+      throw new Error(`Withdraw failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }
-  async getPosition() {
-    const positionManager = AerodromeNonfungiblePositionManager__factory.connect(this.NonfungiblePositionManager, this.provider);
+
+  /**
+   * Get current balance in USD value
+   * @returns Promise<number> Current balance in USD
+   */
+  async getBalance(): Promise<number> {
+    const positionManager = AerodromeNonfungiblePositionManager__factory.connect(this.nonfungiblePositionManager, this.provider);
+
     try {
-      let positionId = await positionManager.tokenOfOwnerByIndex(this.wallet.address, 0);
-      let position = await positionManager.positions(positionId);
+      const positionId = await positionManager.tokenOfOwnerByIndex(this.wallet.address, 0);
+      const position = await positionManager.positions(positionId);
+      const pool = AerodromePool__factory.connect(this.pool, this.provider);
+      const slot0 = await pool.slot0();
+      const sqrtPriceX96 = new BigNumber(slot0.sqrtPriceX96.toString());
+      const sqrtPriceLowerX96 = this.getSqrtRatioAtTick(BigInt(position.tickLower));
+      const sqrtPriceUpperX96 = this.getSqrtRatioAtTick(BigInt(position.tickUpper));
+
+      const { amount0Bigint, amount1Bigint } = await this.getAmounFromLiquidity(position.liquidity, sqrtPriceX96, sqrtPriceLowerX96, sqrtPriceUpperX96);
+
+      if (amount0Bigint === 0n && amount1Bigint === 0n) {
+        return 0;
+      }
+
+      const quoter = AerodromeSlipstreamQuoter__factory.connect(this.quoter, this.provider);
+      const path = ethers.solidityPacked(["address", "uint24", "address"], [this.msUsdAddress, TICK_SPACING, this.usdcAddress]);
+
+      const data = await quoter.quoteExactInput.staticCall(path, amount0Bigint);
+      const totalAmountUSDCBigInt = data[0] + amount1Bigint;
+      const result = Number(formatUnits(totalAmountUSDCBigInt, this.decimalToken1));
+
+      return result;
+    } catch (error: any) {
+      if (error.message.includes("out of bound")) {
+        logger.info("No position found, returning 0 balance");
+        return 0;
+      }
+      logger.error("Error getting balance:", error);
+      throw new Error(`Failed to get balance: ${error.message}`);
+    }
+  }
+  /**
+   * Get current position information
+   * @returns Promise<Position> Position details or empty position if none exists
+   */
+  async getPosition(): Promise<Position> {
+    const positionManager = AerodromeNonfungiblePositionManager__factory.connect(this.nonfungiblePositionManager, this.provider);
+
+    try {
+      const positionId = await positionManager.tokenOfOwnerByIndex(this.wallet.address, 0);
+      const position = await positionManager.positions(positionId);
+
       return {
         havePosition: true,
         tokenId: positionId,
-        tickLower: position.tickLower,
-        tickUpper: position.tickUpper,
+        tickLower: Number(position.tickLower),
+        tickUpper: Number(position.tickUpper),
         liquidity: position.liquidity,
       };
-    } catch (e: any) {
-      if (e.message.includes("out of bound")) {
+    } catch (error: any) {
+      if (error.message.includes("out of bound")) {
+        logger.info("No position found for wallet");
         return {
           havePosition: false,
           tokenId: 0n,
@@ -235,180 +305,357 @@ export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
           liquidity: 0n,
         };
       }
-      logger.error(e);
-      throw e;
+      logger.error("Error getting position:", error);
+      throw new Error(`Failed to get position: ${error.message}`);
     }
   }
+  /**
+   * Calculate sqrt ratio at given tick
+   * @param tick Tick value
+   * @returns BigNumber Sqrt ratio at the tick
+   */
   getSqrtRatioAtTick(tick: bigint): BigNumber {
-    return new BigNumber(Math.floor(Math.sqrt(1.0001 ** Number(tick)) * 2 ** 96));
-  }
-  async getAmounFromLiquidity(liquidity: bigint, sqrtPriceX96: BigNumber, sqrtPriceLowerX96: BigNumber, sqrtPriceUpperX96: BigNumber) {
-    let liquidityBigNunmber = new BigNumber(liquidity);
-    let sqrtPriceX96BigNumber = new BigNumber(sqrtPriceX96);
-    let sqrtPriceLowerX96BigNumber = new BigNumber(sqrtPriceLowerX96);
-    let sqrtPriceUpperX96BigNumber = new BigNumber(sqrtPriceUpperX96);
-    let amount0 = new BigNumber(0);
-    let amount1 = new BigNumber(0);
-    let sqrtPriceUpper = sqrtPriceUpperX96BigNumber.div(new BigNumber(2).pow(96));
-    let sqrtPrice = sqrtPriceX96BigNumber.div(new BigNumber(2).pow(96));
-    amount0 = liquidityBigNunmber.times(sqrtPriceUpper.minus(sqrtPrice)).div(sqrtPriceUpper.times(sqrtPrice));
-    amount1 = liquidityBigNunmber.times(sqrtPriceX96BigNumber.minus(sqrtPriceLowerX96BigNumber)).div(new BigNumber(2).pow(96));
-    let amount0Bigint = BigInt(Number(amount0.toFixed(0)));
-    let amount1Bigint = BigInt(Number(amount1.toFixed(0)));
-    return { amount0Bigint, amount1Bigint };
-  }
-  async getRatio(tickLower: number, tickUpper: number) {
-    let pool = AerodromePool__factory.connect(this.pool, this.provider);
-    let slot0 = await pool.slot0();
-    let sqrtPriceX96 = new BigNumber(slot0.sqrtPriceX96.toString());
-    let sqrtPriceLowerX96 = this.getSqrtRatioAtTick(BigInt(tickLower));
-    let sqrtPriceUpperX96 = this.getSqrtRatioAtTick(BigInt(tickUpper));
-    let sqrtPriceX96BigNumber = new BigNumber(sqrtPriceX96);
-    let sqrtPriceLowerX96BigNumber = new BigNumber(sqrtPriceLowerX96);
-    let sqrtPriceUpperX96BigNumber = new BigNumber(sqrtPriceUpperX96);
-    let sqrtPriceUpper = sqrtPriceUpperX96BigNumber.div(new BigNumber(2).pow(96));
-    let sqrtPrice = sqrtPriceX96BigNumber.div(new BigNumber(2).pow(96));
-    let amount0 = sqrtPriceUpper.minus(sqrtPrice).div(sqrtPriceUpper.times(sqrtPrice));
-    let amount1 = sqrtPriceX96BigNumber.minus(sqrtPriceLowerX96BigNumber).div(new BigNumber(2).pow(96));
-    let ratio = amount0.div(amount1);
-    return ratio;
-  }
-  async swap(amount: bigint, token0ToToken1: boolean) {
-    console.log(`swap amount: ${amount}, token0ToToken1: ${token0ToToken1}`);
-    let balancePre = await this.getBalanceToken();
     try {
-      let tokenIn = this.token0;
-      let tokenOut = this.token1;
-      if (token0ToToken1 == false) {
-        tokenIn = this.token1;
-        tokenOut = this.token0;
+      return new BigNumber(Math.floor(Math.sqrt(1.0001 ** Number(tick)) * 2 ** 96));
+    } catch (error) {
+      logger.error("Error calculating sqrt ratio at tick:", error);
+      throw new Error(`Failed to calculate sqrt ratio at tick: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+  /**
+   * Calculate token amounts from liquidity position
+   * @param liquidity Liquidity amount
+   * @param sqrtPriceX96 Current sqrt price
+   * @param sqrtPriceLowerX96 Lower sqrt price
+   * @param sqrtPriceUpperX96 Upper sqrt price
+   * @returns Promise<LiquidityAmounts> Calculated token amounts
+   */
+  async getAmounFromLiquidity(liquidity: bigint, sqrtPriceX96: BigNumber, sqrtPriceLowerX96: BigNumber, sqrtPriceUpperX96: BigNumber): Promise<LiquidityAmounts> {
+    try {
+      const liquidityBigNumber = new BigNumber(liquidity.toString());
+      const sqrtPriceX96BigNumber = new BigNumber(sqrtPriceX96.toString());
+      const sqrtPriceLowerX96BigNumber = new BigNumber(sqrtPriceLowerX96.toString());
+      const sqrtPriceUpperX96BigNumber = new BigNumber(sqrtPriceUpperX96.toString());
+
+      const sqrtPriceUpper = sqrtPriceUpperX96BigNumber.div(new BigNumber(2).pow(96));
+      const sqrtPrice = sqrtPriceX96BigNumber.div(new BigNumber(2).pow(96));
+
+      const amount0 = liquidityBigNumber.times(sqrtPriceUpper.minus(sqrtPrice)).div(sqrtPriceUpper.times(sqrtPrice));
+
+      const amount1 = liquidityBigNumber.times(sqrtPriceX96BigNumber.minus(sqrtPriceLowerX96BigNumber)).div(new BigNumber(2).pow(96));
+
+      return {
+        amount0Bigint: BigInt(Number(amount0.toFixed(0))),
+        amount1Bigint: BigInt(Number(amount1.toFixed(0))),
+      };
+    } catch (error) {
+      logger.error("Error calculating amounts from liquidity:", error);
+      throw new Error(`Failed to calculate amounts from liquidity: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+  /**
+   * Calculate ratio between token amounts for given tick range
+   * @param tickLower Lower tick of the range
+   * @param tickUpper Upper tick of the range
+   * @returns Promise<BigNumber> Ratio between token amounts
+   */
+  async getRatio(tickLower: number, tickUpper: number): Promise<BigNumber> {
+    try {
+      const pool = AerodromePool__factory.connect(this.pool, this.provider);
+      const slot0 = await pool.slot0();
+      const sqrtPriceX96 = new BigNumber(slot0.sqrtPriceX96.toString());
+      const sqrtPriceLowerX96 = this.getSqrtRatioAtTick(BigInt(tickLower));
+      const sqrtPriceUpperX96 = this.getSqrtRatioAtTick(BigInt(tickUpper));
+
+      const sqrtPriceX96BigNumber = new BigNumber(sqrtPriceX96);
+      const sqrtPriceLowerX96BigNumber = new BigNumber(sqrtPriceLowerX96);
+      const sqrtPriceUpperX96BigNumber = new BigNumber(sqrtPriceUpperX96);
+
+      const sqrtPriceUpper = sqrtPriceUpperX96BigNumber.div(new BigNumber(2).pow(96));
+      const sqrtPrice = sqrtPriceX96BigNumber.div(new BigNumber(2).pow(96));
+
+      const amount0 = sqrtPriceUpper.minus(sqrtPrice).div(sqrtPriceUpper.times(sqrtPrice));
+      const amount1 = sqrtPriceX96BigNumber.minus(sqrtPriceLowerX96BigNumber).div(new BigNumber(2).pow(96));
+      const ratio = amount0.div(amount1);
+
+      return ratio;
+    } catch (error) {
+      logger.error("Error calculating ratio:", error);
+      throw new Error(`Failed to calculate ratio: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+  /**
+   * Execute a token swap
+   * @param amount Amount to swap
+   * @param token0ToToken1 Direction of swap (true: token0->token1, false: token1->token0)
+   * @returns Promise<TransactionReceipt | undefined> Transaction receipt
+   */
+  async swap(amount: bigint, token0ToToken1: boolean): Promise<TransactionReceipt | undefined> {
+    try {
+      const balancePre = await this.getBalanceToken();
+
+      const tokenIn = token0ToToken1 ? this.token0 : this.token1;
+      const tokenOut = token0ToToken1 ? this.token1 : this.token0;
+
+      // Validate balance
+      if (token0ToToken1 && balancePre.balanceToken0 < amount) {
+        throw new Error(`Insufficient token0 balance: ${balancePre.balanceToken0} < ${amount}`);
       }
-      if (token0ToToken1 == true) {
-        if (balancePre.balanceToken0 < amount) throw Error(`Balance token0 ${balancePre.balanceToken0} is less than amount ${amount}`);
-      } else {
-        if (balancePre.balanceToken1 < amount) throw Error(`Balance token1 ${balancePre.balanceToken1} is less than amount ${amount}`);
+      if (!token0ToToken1 && balancePre.balanceToken1 < amount) {
+        throw new Error(`Insufficient token1 balance: ${balancePre.balanceToken1} < ${amount}`);
       }
-      let tokenInContract = ERC20__factory.connect(tokenIn, this.wallet);
-      let router = AerodromeSlipRouter__factory.connect(this.router, this.wallet);
-      let allowance = await tokenInContract.allowance(this.wallet.address, this.router);
-      if (allowance < amount) {
-        let txApprove = await tokenInContract.approve(this.router, ethers.MaxUint256);
-        let txApproveReceipt = await txApprove.wait();
-        console.log(" approve success ", txApproveReceipt?.hash);
-      }
-      let deadline = Math.floor(Date.now() / 1000) + 360;
-      let tx = await router.exactInputSingle({
+
+      // Check and approve token allowance
+      await this.ensureTokenAllowance(tokenIn, amount);
+
+      // Execute swap
+      const router = AerodromeSlipRouter__factory.connect(this.router, this.wallet);
+      const deadline = Math.floor(Date.now() / 1000) + SWAP_DEADLINE_BUFFER;
+
+      const tx = await router.exactInputSingle({
         tokenIn,
         tokenOut,
-        tickSpacing: 50,
+        tickSpacing: TICK_SPACING,
         recipient: this.wallet.address,
-        deadline: deadline,
+        deadline,
         amountIn: amount,
         amountOutMinimum: 0,
         sqrtPriceLimitX96: 0,
       });
 
-      let receipt = await tx.wait();
-      console.log(" swap success ", receipt?.hash);
-      return receipt;
-    } catch (e) {
-      console.log(" error swap ", e);
+      const receipt = await tx.wait();
+      logger.info(`Swap successful: ${receipt?.hash}`);
+      return receipt || undefined;
+    } catch (error) {
+      logger.error("Swap failed:", error);
+      throw new Error(`Swap failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }
-  public async increaseLiquidity(tokenId: bigint, amount0: bigint, amount1: bigint) {
-    console.log(`exec increateLiquidity params: tokenId: ${tokenId}, amount0: ${amount0}, amount1: ${amount1}`);
-    if (amount0 == 0n && amount1 == 0n) {
-      console.log(" amount0 and amount1 is 0, skip increase liquidity");
+
+  /**
+   * Ensure token allowance for the router
+   * @param tokenAddress Token contract address
+   * @param amount Required amount
+   */
+  private async ensureTokenAllowance(tokenAddress: string, amount: bigint): Promise<void> {
+    try {
+      const tokenContract = ERC20__factory.connect(tokenAddress, this.wallet);
+      const allowance = await tokenContract.allowance(this.wallet.address, this.router);
+
+      if (allowance < amount) {
+        logger.info(`Approving token ${tokenAddress} for router`);
+        const txApprove = await tokenContract.approve(this.router, ethers.MaxUint256);
+        await txApprove.wait();
+        logger.info(`Token approval successful: ${txApprove.hash}`);
+      }
+    } catch (error) {
+      logger.error(`Failed to approve token ${tokenAddress}:`, error);
+      throw new Error(`Token approval failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+
+  /**
+   * Ensure token allowance for the position manager
+   * @param tokenAddress Token contract address
+   * @param amount Required amount
+   */
+  private async ensureTokenAllowanceForPositionManager(tokenAddress: string, amount: bigint): Promise<void> {
+    try {
+      const tokenContract = ERC20__factory.connect(tokenAddress, this.wallet);
+      const allowance = await tokenContract.allowance(this.wallet.address, this.nonfungiblePositionManager);
+
+      if (allowance < amount) {
+        logger.info(`Approving token ${tokenAddress} for position manager`);
+        const txApprove = await tokenContract.approve(this.nonfungiblePositionManager, ethers.MaxUint256);
+        await txApprove.wait();
+        logger.info(`Token approval successful: ${txApprove.hash}`);
+      }
+    } catch (error) {
+      logger.error(`Failed to approve token ${tokenAddress} for position manager:`, error);
+      throw new Error(`Token approval failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+
+  /**
+   * Increase liquidity for an existing position
+   * @param tokenId Position token ID
+   * @param amount0 Desired amount of token0
+   * @param amount1 Desired amount of token1
+   * @returns Promise<TransactionReceipt | undefined> Transaction receipt
+   */
+  public async increaseLiquidity(tokenId: bigint, amount0: bigint, amount1: bigint): Promise<TransactionReceipt | undefined> {
+    if (amount0 === 0n && amount1 === 0n) {
+      logger.info("Amount0 and amount1 are 0, skipping increase liquidity");
       return;
     }
+
     try {
-      let positionManager = AerodromeNonfungiblePositionManager__factory.connect(this.NonfungiblePositionManager, this.wallet);
-      let deadline = Math.floor(Date.now() / 1000) + 3600;
+      const positionManager = AerodromeNonfungiblePositionManager__factory.connect(this.nonfungiblePositionManager, this.wallet);
+      const deadline = Math.floor(Date.now() / 1000) + DEFAULT_DEADLINE_BUFFER;
 
-      let token0Contract = ERC20__factory.connect(this.token0, this.wallet);
-      let allowanceToken0 = await token0Contract.allowance(this.wallet.address, this.NonfungiblePositionManager);
-      if (allowanceToken0 < amount0) {
-        let txApprove = await token0Contract.approve(this.NonfungiblePositionManager, ethers.MaxUint256);
-        let txApproveReceipt = await txApprove.wait();
-        console.log(" approve success ", txApproveReceipt?.hash);
-      }
+      // Approve tokens if needed
+      await this.ensureTokenAllowanceForPositionManager(this.token0, amount0);
+      await this.ensureTokenAllowanceForPositionManager(this.token1, amount1);
 
-      let token1Contract = ERC20__factory.connect(this.token1, this.wallet);
-      let allowanceToken1 = await token1Contract.allowance(this.wallet.address, this.NonfungiblePositionManager);
-      if (allowanceToken1 < amount1) {
-        let txApprove = await token1Contract.approve(this.NonfungiblePositionManager, ethers.MaxUint256);
-        let txApproveReceipt = await txApprove.wait();
-        console.log(" approve success ", txApproveReceipt?.hash);
-      }
-
-      let tx = await positionManager.increaseLiquidity({
-        tokenId: tokenId,
+      const tx = await positionManager.increaseLiquidity({
+        tokenId,
         amount0Desired: amount0,
         amount1Desired: amount1,
         amount0Min: 0n,
         amount1Min: 0n,
-        deadline: deadline,
+        deadline,
       });
-      let receipt = await tx.wait();
-      console.log(" increase liquidity receipt ", receipt?.hash);
-      return receipt;
-    } catch (e) {
-      console.log(" error increase liquidity ", e);
-    }
-  }
-  public async getAmountSwapDeposit(amount: number, tickLower: number, tickUpper: number) {
-    let ratio = await this.getRatio(tickLower, tickUpper);
-    if (this.token == this.token0) {
-      let p0on1 = await this.getPriceToken0onToken1();
-      let s = BigNumber(parseUnits(amount.toFixed(this.decimalToken0), this.decimalToken0));
-      let amountSwap = s.div(BigNumber(1).plus(ratio.times(p0on1)));
-      return {
-        amountSwap: amountSwap.toNumber(),
-        amountToken0After: s.minus(amountSwap).toNumber(),
-        amountToken1After: amountSwap.times(p0on1).toNumber(),
-      };
-    } else {
-      let p1on0 = await this.getPriceToken0onToken1(); // token0 per token1
-      let s = new BigNumber(parseUnits(amount.toFixed(this.decimalToken1), this.decimalToken1).toString());
-      let amountSwap = s.div(new BigNumber(1).plus(new BigNumber(1).div(ratio).times(p1on0)));
-      return {
-        amountSwap: amountSwap.toNumber(),
-        amountToken0After: amountSwap.times(p1on0).toNumber(),
-        amountToken1After: s.minus(amountSwap).toNumber(),
-      };
-    }
-  }
-  public async getPriceToken1onToken0(): Promise<number> {
-    let pool = AerodromePool__factory.connect(this.pool, this.provider);
-    let slot0 = await pool.slot0();
-    let sqrtPriceX96 = new BigNumber(slot0.sqrtPriceX96.toString());
-    let sqrtP = sqrtPriceX96.div(new BigNumber(2).pow(96));
-    let P = sqrtP.pow(2);
-    return P.toNumber();
-  }
-  public async getPriceToken0onToken1(): Promise<number> {
-    let priceToken1onToken0 = await this.getPriceToken1onToken0();
-    let inverse = new BigNumber(1).div(priceToken1onToken0);
-    return inverse.toNumber();
-  }
-  public async getBestTick() {
-    // safe tick
-    let lowerTick = -276400n;
-    let upperTick = -276250n;
-    return {
-      lowerTick: lowerTick,
-      upperTick: upperTick,
-    };
-  }
-  public async getBalanceToken() {
-    let token0 = ERC20__factory.connect(this.token0, this.provider);
-    let token1 = ERC20__factory.connect(this.token1, this.provider);
 
-    let [balanceToken0, balanceToken1] = await Promise.all([token0.balanceOf(this.wallet.address), token1.balanceOf(this.wallet.address)]);
+      const receipt = await tx.wait();
+      logger.info(`Increase liquidity successful: ${receipt?.hash}`);
+      return receipt || undefined;
+    } catch (error) {
+      logger.error("Error increasing liquidity:", error);
+      throw new Error(`Failed to increase liquidity: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+
+  /**
+   * Handle deposit for token0
+   * @param amountBigInt Amount in BigInt format
+   * @param amountSwap Calculated swap amounts
+   * @param position Current position
+   */
+  private async depositToken0(amountBigInt: bigint, amountSwap: SwapAmounts, position: Position): Promise<void> {
+    const balancePre = await this.getBalanceToken();
+    if (balancePre.balanceToken0 < amountBigInt) {
+      throw new Error(`Insufficient token0 balance: ${balancePre.balanceToken0} < ${amountBigInt}`);
+    }
+
+    await this.swap(BigInt(amountSwap.amountSwap.toFixed(0)), true);
+    await sleep(SLEEP_DURATION);
+
+    const balancePost = await this.getBalanceToken();
+    const amount0 = balancePre.balanceToken0 - balancePost.balanceToken0;
+    const amount1 = balancePost.balanceToken1 - balancePre.balanceToken1;
+
+    await this.increaseLiquidity(position.tokenId, amount0, amount1);
+  }
+
+  /**
+   * Handle deposit for token1
+   * @param amountBigInt Amount in BigInt format
+   * @param amountSwap Calculated swap amounts
+   * @param position Current position
+   */
+  private async depositToken1(amountBigInt: bigint, amountSwap: SwapAmounts, position: Position): Promise<void> {
+    const balancePre = await this.getBalanceToken();
+    if (balancePre.balanceToken1 < amountBigInt) {
+      throw new Error(`Insufficient token1 balance: ${balancePre.balanceToken1} < ${amountBigInt}`);
+    }
+
+    await this.swap(BigInt(amountSwap.amountSwap.toFixed(0)), false);
+    await sleep(SLEEP_DURATION);
+
+    const balancePost = await this.getBalanceToken();
+    const amount0 = balancePost.balanceToken0 - balancePre.balanceToken0;
+    const amount1 = balancePre.balanceToken1 - balancePost.balanceToken1;
+
+    await this.increaseLiquidity(position.tokenId, amount0, amount1);
+  }
+  /**
+   * Calculate optimal swap amounts for depositing liquidity
+   * @param amount Amount to deposit
+   * @param tickLower Lower tick of the position
+   * @param tickUpper Upper tick of the position
+   * @returns Promise<SwapAmounts> Calculated swap amounts and resulting token amounts
+   */
+  public async getAmountSwapDeposit(amount: number, tickLower: number, tickUpper: number): Promise<SwapAmounts> {
+    try {
+      const ratio = await this.getRatio(tickLower, tickUpper);
+
+      if (this.token === this.token0) {
+        const p0on1 = await this.getPriceToken0onToken1();
+        const s = BigNumber(parseUnits(amount.toFixed(this.decimalToken0), this.decimalToken0));
+        const amountSwap = s.div(BigNumber(1).plus(ratio.times(p0on1)));
+
+        return {
+          amountSwap: amountSwap.toNumber(),
+          amountToken0After: s.minus(amountSwap).toNumber(),
+          amountToken1After: amountSwap.times(p0on1).toNumber(),
+        };
+      } else {
+        const p1on0 = await this.getPriceToken0onToken1(); // token0 per token1
+        const s = new BigNumber(parseUnits(amount.toFixed(this.decimalToken1), this.decimalToken1).toString());
+        const amountSwap = s.div(new BigNumber(1).plus(new BigNumber(1).div(ratio).times(p1on0)));
+
+        return {
+          amountSwap: amountSwap.toNumber(),
+          amountToken0After: amountSwap.times(p1on0).toNumber(),
+          amountToken1After: s.minus(amountSwap).toNumber(),
+        };
+      }
+    } catch (error) {
+      logger.error("Error calculating swap amounts:", error);
+      throw new Error(`Failed to calculate swap amounts: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+  /**
+   * Get price of token1 in terms of token0
+   * @returns Promise<number> Price of token1 in token0
+   */
+  public async getPriceToken1onToken0(): Promise<number> {
+    try {
+      const pool = AerodromePool__factory.connect(this.pool, this.provider);
+      const slot0 = await pool.slot0();
+      const sqrtPriceX96 = new BigNumber(slot0.sqrtPriceX96.toString());
+      const sqrtP = sqrtPriceX96.div(new BigNumber(2).pow(96));
+      const P = sqrtP.pow(2);
+      return P.toNumber();
+    } catch (error) {
+      logger.error("Error getting token1 price:", error);
+      throw new Error(`Failed to get token1 price: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+  /**
+   * Get price of token0 in terms of token1
+   * @returns Promise<number> Price of token0 in token1
+   */
+  public async getPriceToken0onToken1(): Promise<number> {
+    try {
+      const priceToken1onToken0 = await this.getPriceToken1onToken0();
+      const inverse = new BigNumber(1).div(priceToken1onToken0);
+      return inverse.toNumber();
+    } catch (error) {
+      logger.error("Error getting token0 price:", error);
+      throw new Error(`Failed to get token0 price: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+  /**
+   * Get optimal tick range for the position
+   * @returns Promise<TickRange> Lower and upper tick values
+   */
+  public async getBestTick(): Promise<TickRange> {
+    // Using safe tick range for msUSD/USDC pair
     return {
-      balanceToken0,
-      balanceToken1,
+      lowerTick: DEFAULT_LOWER_TICK,
+      upperTick: DEFAULT_UPPER_TICK,
     };
+  }
+  /**
+   * Get current token balances for both tokens
+   * @returns Promise<TokenBalance> Current balances of token0 and token1
+   */
+  public async getBalanceToken(): Promise<TokenBalance> {
+    try {
+      const token0Contract = ERC20__factory.connect(this.token0, this.provider);
+      const token1Contract = ERC20__factory.connect(this.token1, this.provider);
+
+      const [balanceToken0, balanceToken1] = await Promise.all([token0Contract.balanceOf(this.wallet.address), token1Contract.balanceOf(this.wallet.address)]);
+
+      return {
+        balanceToken0,
+        balanceToken1,
+      };
+    } catch (error) {
+      logger.error("Error getting token balances:", error);
+      throw new Error(`Failed to get token balances: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
   }
 
   public async getLiquidityAvailableAtAPY(targetAPY: number): Promise<GetLiquidityAvailableAtAPYResponse> {
@@ -427,85 +674,89 @@ export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
   }
 
   // create position
-  public async createPosition(amount: number) {
-    let amountBigInt = parseUnits(amount.toFixed(this.decimalToken), this.decimalToken);
-    console.log("Creating new position...");
+  /**
+   * Create a new liquidity position
+   * @param amount Amount to deposit
+   */
+  public async createPosition(amount: number): Promise<void> {
+    try {
+      const amountBigInt = parseUnits(amount.toFixed(this.decimalToken), this.decimalToken);
+      logger.info("Creating new position...");
 
-    // Get best tick range
-    const { lowerTick, upperTick } = await this.getBestTick();
-    console.log(`Creating position with ticks: lower=${lowerTick}, upper=${upperTick}`);
+      // Get best tick range
+      const { lowerTick, upperTick } = await this.getBestTick();
+      logger.info(`Creating position with ticks: lower=${lowerTick}, upper=${upperTick}`);
 
-    // Get current token balances
-    const balancePre = await this.getBalanceToken();
-    console.log(`Balance before: token0=${balancePre.balanceToken0}, token1=${balancePre.balanceToken1}`);
+      // Get current token balances
+      const balancePre = await this.getBalanceToken();
+      logger.info(`Balance before: token0=${balancePre.balanceToken0}, token1=${balancePre.balanceToken1}`);
 
-    // Calculate amounts needed for the position
-    const amountSwap = await this.getAmountSwapDeposit(amount, Number(lowerTick), Number(upperTick));
+      // Calculate amounts needed for the position
+      const amountSwap = await this.getAmountSwapDeposit(amount, Number(lowerTick), Number(upperTick));
+      logger.info(`Amount to swap: ${amountSwap.amountSwap}`);
 
-    console.log(`Amount to swap: ${amountSwap.amountSwap}`);
+      // Perform swap to get optimal ratio
+      if (this.token === this.token0) {
+        // We have token0, need to swap some to token1
+        if (balancePre.balanceToken0 < amountBigInt) {
+          throw new Error(`Insufficient token0 balance for swap: ${balancePre.balanceToken0} < ${amountSwap.amountSwap}`);
+        }
 
-    // Perform swap to get optimal ratio
-    if (this.token == this.token0) {
-      // We have token0, need to swap some to token1
-      if (balancePre.balanceToken0 < amountBigInt) {
-        throw new Error(`Insufficient token0 balance for swap: ${balancePre.balanceToken0} < ${amountSwap.amountSwap}`);
+        await this.swap(BigInt(amountSwap.amountSwap.toFixed(0)), true); // true: token0 to token1
+
+        const balancePost = await this.getBalanceToken();
+        const amount0 = balancePre.balanceToken0 - balancePost.balanceToken0;
+        const amount1 = balancePost.balanceToken1 - balancePre.balanceToken1;
+
+        logger.info(`After swap: amount0=${amount0}, amount1=${amount1}`);
+
+        // Create position with the swapped amounts
+        await this.mintPosition(lowerTick, upperTick, amount0, amount1);
+      } else {
+        // We have token1, need to swap some to token0
+        if (balancePre.balanceToken1 < amountBigInt) {
+          throw new Error(`Insufficient token1 balance for swap: ${balancePre.balanceToken1} < ${amountSwap.amountSwap}`);
+        }
+
+        await this.swap(BigInt(amountSwap.amountSwap.toFixed(0)), false); // false: token1 to token0
+        await sleep(2000);
+        const balancePost = await this.getBalanceToken();
+        const amount0 = balancePost.balanceToken0 - balancePre.balanceToken0;
+        const amount1 = balancePre.balanceToken1 - balancePost.balanceToken1;
+        logger.info(`After swap: amount0=${amount0}, amount1=${amount1}`);
+        // Create position with the swapped amounts
+        await this.mintPosition(lowerTick, upperTick, amount0, amount1);
       }
 
-      await this.swap(BigInt(amountSwap.amountSwap.toFixed(0)), true); // true: token0 to token1
-
-      const balancePost = await this.getBalanceToken();
-      const amount0 = balancePre.balanceToken0 - balancePost.balanceToken0;
-      const amount1 = balancePost.balanceToken1 - balancePre.balanceToken1;
-
-      console.log(`After swap: amount0=${amount0}, amount1=${amount1}`);
-
-      // Create position with the swapped amounts
-      await this.mintPosition(lowerTick, upperTick, amount0, amount1);
-    } else {
-      // We have token1, need to swap some to token0
-      if (balancePre.balanceToken1 < amountBigInt) {
-        throw new Error(`Insufficient token1 balance for swap: ${balancePre.balanceToken1} < ${amountSwap.amountSwap}`);
-      }
-
-      await this.swap(BigInt(amountSwap.amountSwap.toFixed(0)), false); // false: token1 to token0
-      await sleep(2000);
-      const balancePost = await this.getBalanceToken();
-      const amount0 = balancePost.balanceToken0 - balancePre.balanceToken0;
-      const amount1 = balancePre.balanceToken1 - balancePost.balanceToken1;
-      console.log(`After swap: amount0=${amount0}, amount1=${amount1}`);
-      // Create position with the swapped amounts
-      await this.mintPosition(lowerTick, upperTick, amount0, amount1);
+      logger.info("Position created successfully!");
+    } catch (error) {
+      logger.error("Error creating position:", error);
+      throw new Error(`Failed to create position: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
-
-    console.log("Position created successfully!");
   }
 
-  private async mintPosition(tickLower: bigint, tickUpper: bigint, amount0: bigint, amount1: bigint) {
-    console.log(`Minting position: tickLower=${tickLower}, tickUpper=${tickUpper}, amount0=${amount0}, amount1=${amount1}`);
+  /**
+   * Mint a new position with the given parameters
+   * @param tickLower Lower tick of the position
+   * @param tickUpper Upper tick of the position
+   * @param amount0 Amount of token0
+   * @param amount1 Amount of token1
+   * @returns Promise<TransactionReceipt | undefined> Transaction receipt
+   */
+  private async mintPosition(tickLower: bigint, tickUpper: bigint, amount0: bigint, amount1: bigint): Promise<TransactionReceipt | undefined> {
+    logger.info(`Minting position: tickLower=${tickLower}, tickUpper=${tickUpper}, amount0=${amount0}, amount1=${amount1}`);
 
     try {
-      const positionManager = AerodromeNonfungiblePositionManager__factory.connect(this.NonfungiblePositionManager, this.wallet);
-      const deadline = Math.floor(Date.now() / 1000) + 3600;
+      const positionManager = AerodromeNonfungiblePositionManager__factory.connect(this.nonfungiblePositionManager, this.wallet);
+      const deadline = Math.floor(Date.now() / 1000) + DEFAULT_DEADLINE_BUFFER;
 
       // Approve tokens for position manager
       const token0Contract = ERC20__factory.connect(this.token0, this.wallet);
       const token1Contract = ERC20__factory.connect(this.token1, this.wallet);
 
-      // Check and approve token0
-      const allowanceToken0 = await token0Contract.allowance(this.wallet.address, this.NonfungiblePositionManager);
-      if (allowanceToken0 < amount0) {
-        const txApprove0 = await token0Contract.approve(this.NonfungiblePositionManager, ethers.MaxUint256);
-        await txApprove0.wait();
-        console.log("Token0 approval successful");
-      }
-
-      // Check and approve token1
-      const allowanceToken1 = await token1Contract.allowance(this.wallet.address, this.NonfungiblePositionManager);
-      if (allowanceToken1 < amount1) {
-        const txApprove1 = await token1Contract.approve(this.NonfungiblePositionManager, ethers.MaxUint256);
-        await txApprove1.wait();
-        console.log("Token1 approval successful");
-      }
+      // Approve tokens if needed
+      await this.ensureTokenAllowanceForPositionManager(this.token0, amount0);
+      await this.ensureTokenAllowanceForPositionManager(this.token1, amount1);
 
       // Get current price for minting
       const pool = AerodromePool__factory.connect(this.pool, this.provider);
@@ -516,7 +767,7 @@ export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
       const mintParams = {
         token0: this.token0,
         token1: this.token1,
-        tickSpacing: 50,
+        tickSpacing: TICK_SPACING,
         tickLower: tickLower,
         tickUpper: tickUpper,
         amount0Desired: amount0,
@@ -530,12 +781,89 @@ export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
 
       const tx = await positionManager.mint(mintParams);
       const receipt = await tx.wait();
-      console.log("Position minted successfully:", receipt?.hash);
+      logger.info(`Position minted successfully: ${receipt?.hash}`);
 
-      return receipt;
+      return receipt || undefined;
     } catch (error) {
-      console.error("Error minting position:", error);
-      throw error;
+      logger.error("Error minting position:", error);
+      throw new Error(`Failed to mint position: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+
+  /**
+   * Decrease liquidity from position
+   * @param position Current position
+   * @param liquidityToWithdraw Amount of liquidity to withdraw
+   */
+  private async decreaseLiquidity(position: Position, liquidityToWithdraw: bigint): Promise<void> {
+    const positionManager = AerodromeNonfungiblePositionManager__factory.connect(this.nonfungiblePositionManager, this.wallet);
+    const deadline = Math.floor(Date.now() / 1000) + DEFAULT_DEADLINE_BUFFER;
+
+    const decreaseParams = {
+      tokenId: position.tokenId,
+      liquidity: liquidityToWithdraw,
+      amount0Min: 0n,
+      amount1Min: 0n,
+      deadline,
+    };
+
+    const [expectedAmount0, expectedAmount1] = await positionManager.decreaseLiquidity.staticCall(decreaseParams);
+    logger.info(`Expected amounts from decrease: amount0=${expectedAmount0}, amount1=${expectedAmount1}`);
+
+    const txDecrease = await positionManager.decreaseLiquidity(decreaseParams);
+    const receiptDecrease = await txDecrease.wait();
+    logger.info(`Decrease liquidity successful: ${receiptDecrease?.hash}`);
+  }
+
+  /**
+   * Collect tokens from position
+   * @param position Current position
+   * @returns Promise<{amount0Received: bigint, amount1Received: bigint}> Received token amounts
+   */
+  private async collectTokens(position: Position): Promise<{ amount0Received: bigint; amount1Received: bigint }> {
+    const positionManager = AerodromeNonfungiblePositionManager__factory.connect(this.nonfungiblePositionManager, this.wallet);
+
+    const balancePre = await this.getBalanceToken();
+    await sleep(SLEEP_DURATION);
+
+    const collectParams = {
+      tokenId: position.tokenId,
+      recipient: this.wallet.address,
+      amount0Max: MAX_UINT128,
+      amount1Max: MAX_UINT128,
+    };
+
+    const txCollect = await positionManager.collect(collectParams);
+    const receiptCollect = await txCollect.wait();
+    logger.info(`Collect successful: ${receiptCollect?.hash}`);
+
+    await sleep(SLEEP_DURATION);
+    const balancePost = await this.getBalanceToken();
+
+    const amount0Received = balancePost.balanceToken0 - balancePre.balanceToken0;
+    const amount1Received = balancePost.balanceToken1 - balancePre.balanceToken1;
+
+    logger.info(`Received amounts: amount0=${amount0Received}, amount1=${amount1Received}`);
+
+    return { amount0Received, amount1Received };
+  }
+
+  /**
+   * Swap withdrawn tokens to desired output token
+   * @param amount0Received Amount of token0 received
+   * @param amount1Received Amount of token1 received
+   */
+  private async swapWithdrawnTokens(amount0Received: bigint, amount1Received: bigint): Promise<void> {
+    if (this.token === this.token0) {
+      // Want to withdraw to token0: swap token1 to token0
+      if (amount1Received > 0n) {
+        await this.swap(amount1Received, false); // false: token1 to token0
+      }
+    } else {
+      // Want to withdraw to token1: swap token0 to token1
+      if (amount0Received > 0n) {
+        await this.swap(amount0Received, true); // true: token0 to token1
+      }
     }
   }
 }

@@ -1,5 +1,4 @@
-export const INTERVAL_TIME_REBALANCE = 6 * 60 * 60 * 1000; // 6 hours
-
+export const INTERVAL_TIME_REBALANCE = 3 * 24 * 60 * 60 * 1000; // 3 hours
 export const MIN_DEPOSIT_WITHDRAW = 1;
 
 export const addresses = {

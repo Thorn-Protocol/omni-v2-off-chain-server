@@ -6,6 +6,7 @@ import StrategyInterface from "../../interfaces/StrategyInterface";
 import { OffChainStrategy__factory } from "../../typechain-types";
 import { ERC20__factory } from "../../typechain-types/factories/ERC20__factory";
 import { sleep } from "../../utils/helper";
+import { INTERVAL_TIME_REBALANCE } from "../../common/config/config";
 
 export default class OffChainVault {
   name: string;
@@ -19,6 +20,13 @@ export default class OffChainVault {
   token: string = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
   tokenDecimal: number = 6;
 
+  /**
+   * Initialize the OffChainVault with vault address, agent private key, provider URL and vault name
+   * @param vaultAddress - The address of the off-chain strategy vault contract
+   * @param agent - Private key of the agent wallet
+   * @param providerUrl - RPC provider URL for blockchain connection
+   * @param name - Name identifier for this vault instance
+   */
   constructor(vaultAddress: string, agent: string, providerUrl: string, name: string) {
     this.provider = new JsonRpcProvider(providerUrl);
     this.agent = new Wallet(agent, this.provider);
@@ -29,18 +37,42 @@ export default class OffChainVault {
     this.name = name;
   }
 
+  /**
+   * Add a new strategy to the vault's strategy list
+   * @param strategy - The strategy instance to add
+   * @param minDebt - Minimum debt threshold for the strategy (currently unused)
+   */
   async addStrategy(strategy: StrategyInterface, minDebt: number = 0) {
     this.strategies.push(strategy);
   }
 
+  /**
+   * Generate and return vault performance report
+   * Currently not implemented
+   */
   async report() {}
 
+  /**
+   * Enable the agent for vault operations
+   * Currently not implemented
+   */
   public async enableAgent() {}
 
-  async getBalanceStrategy(strategy: StrategyInterface) {
+  /**
+   * Get the current balance of a specific strategy
+   * @param strategy - The strategy to check balance for
+   * @returns Promise<number> - The balance amount
+   */
+  async getStrategyBalance(strategy: StrategyInterface) {
     return await strategy.getBalance();
   }
 
+  /**
+   * Optimize liquidity allocation across all strategies to maximize APY
+   * Uses binary search to find the optimal APY that can be achieved with available liquidity
+   * @param totalAsset - Total available assets to allocate
+   * @returns Object containing optimized APY, minimum liquidity requirements, and allocation data
+   */
   async optimizeLiquidity(totalAsset: number) {
     // init
     let minimumLiquidity = 0;
@@ -69,7 +101,6 @@ export default class OffChainVault {
     // calculate best apr can provide with remain liquidity
     let minAPR = 0;
     let maxAPR = 100;
-    console.log("remain liquidity ", totalAsset - minimumLiquidity);
     while (minAPR < maxAPR - 0.001) {
       let datacache = [];
       let targetAPY = (minAPR + maxAPR) / 2;
@@ -105,9 +136,8 @@ export default class OffChainVault {
         maxAPR = targetAPY;
       }
     }
-
     for (let i = 0; i < this.strategies.length; i++) {
-      data[i].liquidity = await this.getBalanceStrategy(this.strategies[i]);
+      data[i].liquidity = await this.getStrategyBalance(this.strategies[i]);
     }
     return {
       apy: minAPR,
@@ -116,12 +146,20 @@ export default class OffChainVault {
     };
   }
 
+  /**
+   * Get the total debt balance of the vault
+   * @returns Promise<number> - Total vault debt in USDC units
+   */
   async getBalanceVault(): Promise<number> {
     let totalAsset = await this.vault.totalDebt();
     return Number(formatUnits(totalAsset, this.tokenDecimal));
   }
 
-  async withdrawFromStrategyToAgent() {
+  /**
+   * Withdraw idle funds from the vault to the agent wallet
+   * Only withdraws if idle balance is >= 1 USDC
+   */
+  async withdrawIdleFunds() {
     let totalIdle = await this.vault.totalIdle();
     if (totalIdle >= parseUnits("1", this.tokenDecimal)) {
       let tx = await this.vault.agentWithdraw(totalIdle);
@@ -130,21 +168,28 @@ export default class OffChainVault {
     }
   }
 
+  /**
+   * Get the USDC balance of the agent wallet
+   * @returns Promise<number> - Agent wallet balance in USDC units
+   */
   async getBalanceAgent() {
     let usdc = ERC20__factory.connect(this.token, this.agent);
     let balance = await usdc.balanceOf(this.agent.address);
     return Number(formatUnits(balance, this.tokenDecimal));
   }
 
-  async doEveryThing() {
-    await this.withdrawFromStrategyToAgent();
-
+  /**
+   * Main rebalancing function that optimizes liquidity across all strategies
+   * 1. Withdraws idle funds from vault to agent
+   * 2. Calculates optimal liquidity allocation
+   * 3. Withdraws excess liquidity from over-allocated strategies
+   * 4. Deposits available liquidity to under-allocated strategies
+   */
+  async rebalanceStrategies() {
+    await this.withdrawIdleFunds();
     let liquidity = await this.getBalanceVault();
-    logger.debug(`liquidity: ${liquidity}`);
     if (liquidity < 1) return;
     let newPlan = await this.optimizeLiquidity(liquidity);
-    console.log("plan", newPlan);
-
     // withdraw from strategy to agent
     for (let i = 0; i < newPlan.data.length; i++) {
       let strategy = newPlan.data[i].strategy;
@@ -162,9 +207,7 @@ export default class OffChainVault {
         await sleep(2000);
       }
     }
-
     let remainLiquidity = await this.getBalanceAgent();
-
     // deposit to strategy
     for (let i = 0; i < newPlan.data.length; i++) {
       let strategy = newPlan.data[i].strategy;
@@ -182,10 +225,28 @@ export default class OffChainVault {
         } catch (e) {
           logger.error(`${this.name}: deposit to strategy ${strategy.name} amount: ${amountWithdraw} failed ${e}`);
         }
-
         await sleep(2000);
         remainLiquidity = await this.getBalanceAgent();
       }
     }
+  }
+
+  /**
+   * Start automatic rebalancing process with configured interval
+   * Uses mutex to prevent concurrent rebalancing operations
+   * Runs continuously until the application is stopped
+   */
+  async autoRebalance() {
+    setInterval(async () => {
+      if (!this.mutex.isLocked()) {
+        try {
+          await this.mutex.runExclusive(async () => {
+            await this.rebalanceStrategies();
+          });
+        } catch (error) {
+          logger.error(`Error in processing: ${error}`);
+        }
+      }
+    }, INTERVAL_TIME_REBALANCE);
   }
 }
