@@ -20,7 +20,7 @@ export function getAgentKey(code: "test-v2" | "usdc-base-v2", type: "secp256k1" 
     return USDC_BASE_V2_AGENT_KEY;
   }
   if (code == "usdc-base-v2" && type == "ed25519") {
-    return USDC_BASE_V2_AGENT_KEY;
+    throw Error("Ed25519 key not supported for usdc-base-v2");
   }
   if (code == "test-v2" && type == "secp256k1") {
     return TEST_V2_AGENT_KEY;
