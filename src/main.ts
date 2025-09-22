@@ -61,23 +61,25 @@ async function main() {
     name: "offchain strategy for TEST Vault on BASE",
     strategies: {
       aedromeMsusdUsdc: { enabled: true, minDebt: 0.1, maxDebt: 3 },
-      aaveV3Usdc: { enabled: true, minDebt: 0.1, maxDebt: 3 },
-      jupiterLendUsdc: { enabled: true, minDebt: 2, maxDebt: 2 },
+      aaveV3Usdc: { enabled: true, minDebt: 0.1, maxDebt: 100 },
+      jupiterLendUsdc: { enabled: true, minDebt: 2, maxDebt: 3 },
     },
   });
 
   await test_OffChainStrategyOnBase.autoRebalance();
 
-  // let usdcV2Base_OffChainStrategyOnBase = new OffChainVault(
-  //   addresses.usdcV2OnBase.offChainStrategy,
-  //   USDC_BASE_V2_AGENT_KEY,
-  //   RPC_URL_BASE,
-  //   "offchain strategy for USDC V2 BASE Vault on BASE"
-  // );
-  // let usdcV2Base_AaveV3UsdcStrategyOnBase = new AaveV3UsdcStrategyOnBase(USDC_BASE_V2_AGENT_KEY, 1, 7);
-  // let usdcV2Base_AedromeMsusdUsdcStrategyOnBase = new AerodromeMsusdUsdcStrategyOnBase(USDC_BASE_V2_AGENT_KEY, 1, 7);
-  // usdcV2Base_OffChainStrategyOnBase.addStrategy(usdcV2Base_AedromeMsusdUsdcStrategyOnBase);
-  // usdcV2Base_OffChainStrategyOnBase.addStrategy(usdcV2Base_AaveV3UsdcStrategyOnBase);
-  // await usdcV2Base_OffChainStrategyOnBase.doEveryThing();
+  let usdcV2Base_OffChainStrategyOnBase = await setupOffChainStrategy({
+    code: "usdc-base-v2",
+    vaultAddress: addresses.usdcV2OnBase.offChainStrategy,
+    providerUrl: RPC_URL_BASE,
+    name: "offchain strategy for USDC V2 BASE Vault on BASE",
+    strategies: {
+      aedromeMsusdUsdc: { enabled: true, minDebt: 1, maxDebt: 7 },
+      aaveV3Usdc: { enabled: true, minDebt: 1, maxDebt: 7 },
+      jupiterLendUsdc: { enabled: false, minDebt: 0, maxDebt: 0 },
+    },
+  });
+
+  await usdcV2Base_OffChainStrategyOnBase.autoRebalance();
 }
 main();

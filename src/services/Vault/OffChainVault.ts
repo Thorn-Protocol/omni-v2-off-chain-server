@@ -198,7 +198,7 @@ export default class OffChainVault {
       let minimumLiquidity = newPlan.data[i].minimumLiquidity;
       if (liquidity > availableLiquidity + minimumLiquidity) {
         let amountWithdraw = liquidity - availableLiquidity - minimumLiquidity;
-        logger.debug(`${this.name}: withdraw from ${strategy.name} amount: ${amountWithdraw}`);
+        logger.info(`${this.name}: withdraw from ${strategy.name} amount: ${amountWithdraw}`);
         try {
           await strategy.withdraw(amountWithdraw);
         } catch {
@@ -220,7 +220,7 @@ export default class OffChainVault {
           amountWithdraw = remainLiquidity;
         }
         try {
-          logger.debug(`${this.name}: deposit to strategy ${strategy.name} amount ${amountWithdraw}`);
+          logger.info(`${this.name}: deposit to strategy ${strategy.name} amount ${amountWithdraw}`);
           await strategy.deposit(amountWithdraw);
         } catch (e) {
           logger.error(`${this.name}: deposit to strategy ${strategy.name} amount: ${amountWithdraw} failed ${e}`);

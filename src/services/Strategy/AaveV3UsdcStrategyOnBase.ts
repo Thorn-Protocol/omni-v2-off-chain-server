@@ -128,7 +128,6 @@ export class AaveV3UsdcStrategyOnBase implements StrategyInterface {
       try {
         this.apy = await getAPYFromDefillama(DEFILLAMA_CODE);
         this.apyUpdateTimestamp = now;
-        logger.info(`${this.name}: APY updated to ${this.apy}%`);
       } catch (error) {
         logger.error(`${this.name}: Failed to fetch APY from Defillama:`, error);
         throw new Error(`Failed to fetch APY: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -156,7 +155,6 @@ export class AaveV3UsdcStrategyOnBase implements StrategyInterface {
       try {
         this.tvl = await getTVLFromDefillama(DEFILLAMA_CODE);
         this.tvlUpdateTimestamp = now;
-        logger.info(`${this.name}: TVL updated to $${this.tvl.toLocaleString()}`);
       } catch (error) {
         logger.error(`${this.name}: Failed to fetch TVL from Defillama:`, error);
         throw new Error(`Failed to fetch TVL: ${error instanceof Error ? error.message : "Unknown error"}`);

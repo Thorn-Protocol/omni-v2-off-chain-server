@@ -130,7 +130,6 @@ export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
       try {
         this.apy = await getAPYFromDefillama(this.defillamaCode);
         this.apyUpdateTimestamp = now;
-        logger.info(`APY updated: ${this.apy}%`);
       } catch (error) {
         logger.error("Failed to fetch APY from DeFiLlama:", error);
         throw new Error(`Failed to fetch APY: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -148,7 +147,6 @@ export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
       try {
         this.tvl = await getTVLFromDefillama(this.defillamaCode);
         this.tvlUpdateTimestamp = now;
-        logger.info(`TVL updated: $${this.tvl.toLocaleString()}`);
       } catch (error) {
         logger.error("Failed to fetch TVL from DeFiLlama:", error);
         throw new Error(`Failed to fetch TVL: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -681,8 +679,6 @@ export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
   public async createPosition(amount: number): Promise<void> {
     try {
       const amountBigInt = parseUnits(amount.toFixed(this.decimalToken), this.decimalToken);
-      logger.info("Creating new position...");
-
       // Get best tick range
       const { lowerTick, upperTick } = await this.getBestTick();
       logger.info(`Creating position with ticks: lower=${lowerTick}, upper=${upperTick}`);
@@ -806,10 +802,6 @@ export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
       amount1Min: 0n,
       deadline,
     };
-
-    const [expectedAmount0, expectedAmount1] = await positionManager.decreaseLiquidity.staticCall(decreaseParams);
-    logger.info(`Expected amounts from decrease: amount0=${expectedAmount0}, amount1=${expectedAmount1}`);
-
     const txDecrease = await positionManager.decreaseLiquidity(decreaseParams);
     const receiptDecrease = await txDecrease.wait();
     logger.info(`Decrease liquidity successful: ${receiptDecrease?.hash}`);
