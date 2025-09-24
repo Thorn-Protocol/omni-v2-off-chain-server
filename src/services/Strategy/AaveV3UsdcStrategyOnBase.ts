@@ -1,6 +1,6 @@
 import { formatUnits, JsonRpcProvider, MaxUint256, parseUnits, Wallet } from "ethers";
 import StrategyInterface, { GetLiquidityAvailableAtAPYResponse } from "../../interfaces/StrategyInterface";
-import { getTimestampNow } from "../../utils/helper";
+import { floorToTwoDecimals, getTimestampNow } from "../../utils/helper";
 import { getAPYFromDefillama, getTVLFromDefillama } from "../DataService/DataService";
 import { RPC_URL_BASE } from "../../common/config/secrets";
 import { PoolProxyBase, PoolProxyBase__factory } from "../../typechain-types";
@@ -194,7 +194,7 @@ export class AaveV3UsdcStrategyOnBase implements StrategyInterface {
 
       // Return available liquidity (capped by maxDebt)
       return {
-        availableLiquidity: Math.max(0, Math.min(deltaLiquidity, this.maxDebt)),
+        availableLiquidity: floorToTwoDecimals(Math.max(0, Math.min(deltaLiquidity, this.maxDebt))),
       };
     } catch (error) {
       logger.error(`${this.name}: Failed to calculate liquidity at APY:`, error);

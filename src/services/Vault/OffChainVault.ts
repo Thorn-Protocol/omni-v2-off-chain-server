@@ -5,7 +5,7 @@ import logger from "../../lib/winston";
 import StrategyInterface from "../../interfaces/StrategyInterface";
 import { OffChainStrategy__factory } from "../../typechain-types";
 import { ERC20__factory } from "../../typechain-types/factories/ERC20__factory";
-import { sleep } from "../../utils/helper";
+import { floorToTwoDecimals, sleep } from "../../utils/helper";
 import { INTERVAL_TIME_REBALANCE } from "../../common/config/config";
 import { registry } from "@coral-xyz/anchor/dist/cjs/utils";
 
@@ -194,7 +194,7 @@ export default class OffChainVault {
 
     realDebt += await this.getBalanceAgent();
 
-    return realDebt;
+    return floorToTwoDecimals(realDebt);
   }
 
   /**
@@ -230,11 +230,10 @@ export default class OffChainVault {
    */
   async rebalanceStrategies() {
     await this.withdrawIdleFunds();
-    let liquidity = await this.getRealBalance();
+    let liquidity = (await this.getRealBalance()) - 1;
     if (liquidity < 1) return;
-    console.log(" liquidity ", liquidity);
+
     let newPlan = await this.optimizeLiquidity(liquidity);
-    console.log("new plan", newPlan);
 
     // withdraw from strategy to agent
     for (let i = 0; i < newPlan.data.length; i++) {

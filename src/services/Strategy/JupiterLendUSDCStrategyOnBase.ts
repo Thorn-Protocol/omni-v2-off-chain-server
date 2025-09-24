@@ -1,6 +1,6 @@
 import { ethers, hexlify, JsonRpcProvider, parseUnits, Wallet } from "ethers";
 import StrategyInterface, { GetLiquidityAvailableAtAPYResponse } from "../../interfaces/StrategyInterface";
-import { getTimestampNow, sleep } from "../../utils/helper";
+import { floorToTwoDecimals, getTimestampNow, sleep } from "../../utils/helper";
 import { RPC_URL_BASE } from "../../common/config/secrets";
 import { AcrossSpokePoolProxy__factory } from "../../typechain-types";
 import axios from "axios";
@@ -147,7 +147,7 @@ export class JupiterLendingUSDCOnBase implements StrategyInterface {
     const requiredTVL = reward / targetAPY;
     const deltaLiquidity = requiredTVL - tvl;
     return {
-      availableLiquidity: Math.max(0, Math.min(deltaLiquidity, this.maxDebt)),
+      availableLiquidity: floorToTwoDecimals(Math.max(0, Math.min(deltaLiquidity, this.maxDebt))),
     };
   }
 
@@ -173,7 +173,8 @@ export class JupiterLendingUSDCOnBase implements StrategyInterface {
    * @param amount - Amount of USDC to deposit
    */
   async deposit(amount: number): Promise<void> {
-    if (amount < MIN_DEPOSIT_WITHDRAW) {
+    amount = Number(amount.toFixed(2));
+    if (amount < 5) {
       logger.info(`${this.name}: Amount ${amount} is less than minimum required ${MIN_DEPOSIT_WITHDRAW}, skipping deposit`);
       return;
     }
@@ -216,7 +217,7 @@ export class JupiterLendingUSDCOnBase implements StrategyInterface {
    * @param amountBigInt - Amount to bridge in BigInt format
    * @returns Suggested fees response from Across API
    */
-  private async suggestedFeesFromBaseToSolana(amountBigInt: bigint): Promise<SuggestedFeesResponse> {
+  async suggestedFeesFromBaseToSolana(amountBigInt: bigint): Promise<SuggestedFeesResponse> {
     try {
       const { data } = await axios.get(`${ACROSS_API_BASE}/suggested-fees`, {
         params: {

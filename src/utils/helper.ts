@@ -45,3 +45,12 @@ export function sleep(ms: number) {
 export function getTimestampNow() {
   return Math.floor(Date.now() / 1000);
 }
+
+/**
+ * Floors a number to two decimal places.
+ * @param value - The number to floor.
+ * @returns The number floored to two decimal places.
+ */
+export function floorToTwoDecimals(value: number): number {
+  return Math.floor(value * 100) / 100;
+}

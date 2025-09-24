@@ -1,5 +1,5 @@
 import { addresses } from "./common/config/config";
-import { RPC_URL_BASE } from "./common/config/secrets";
+import { RPC_URL_BASE, TEST_EVM_KEY, TEST_SOLANA_KEY, USDC_BASE_V2_AGENT_ED25519_KEY, USDC_BASE_V2_AGENT_KEY } from "./common/config/secrets";
 import { AaveV3UsdcStrategyOnBase } from "./services/Strategy/AaveV3UsdcStrategyOnBase";
 import { AerodromeMsusdUsdcStrategyOnBase } from "./services/Strategy/AerodromeMsusdUsdcStrategyOnBase";
 import { JupiterLendingUSDCOnBase } from "./services/Strategy/JupiterLendUSDCStrategyOnBase";
@@ -60,8 +60,8 @@ async function main() {
     providerUrl: RPC_URL_BASE,
     name: "offchain strategy for TEST Vault on BASE",
     strategies: {
-      aedromeMsusdUsdc: { enabled: true, minDebt: 0.1, maxDebt: 3 },
-      aaveV3Usdc: { enabled: true, minDebt: 0.1, maxDebt: 100 },
+      aedromeMsusdUsdc: { enabled: true, minDebt: 1, maxDebt: 3 },
+      aaveV3Usdc: { enabled: true, minDebt: 1, maxDebt: 100 },
       jupiterLendUsdc: { enabled: true, minDebt: 2, maxDebt: 3 },
     },
   });
@@ -74,12 +74,11 @@ async function main() {
     providerUrl: RPC_URL_BASE,
     name: "offchain strategy for USDC V2 BASE Vault on BASE",
     strategies: {
-      aedromeMsusdUsdc: { enabled: true, minDebt: 1, maxDebt: 7 },
-      aaveV3Usdc: { enabled: true, minDebt: 1, maxDebt: 7 },
-      jupiterLendUsdc: { enabled: true, minDebt: 1, maxDebt: 3 },
+      aedromeMsusdUsdc: { enabled: true, minDebt: 1, maxDebt: 3 },
+      aaveV3Usdc: { enabled: true, minDebt: 1, maxDebt: 100 },
+      jupiterLendUsdc: { enabled: true, minDebt: 5, maxDebt: 10 },
     },
   });
-
-  await usdcV2Base_OffChainStrategyOnBase.rebalanceStrategies();
+  await usdcV2Base_OffChainStrategyOnBase.autoRebalance();
 }
 main();

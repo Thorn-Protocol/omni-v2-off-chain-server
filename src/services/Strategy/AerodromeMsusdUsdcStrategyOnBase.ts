@@ -4,7 +4,7 @@ import { ethers, formatUnits, JsonRpcProvider, parseUnits, Wallet, TransactionRe
 
 // Internal imports
 import logger from "../../lib/winston";
-import { getTimestampNow, sleep } from "../../utils/helper";
+import { floorToTwoDecimals, getTimestampNow, sleep } from "../../utils/helper";
 import { getAPYFromDefillama, getTVLFromDefillama } from "../DataService/DataService";
 import StrategyInterface, { GetLiquidityAvailableAtAPYResponse } from "../../interfaces/StrategyInterface";
 import { RPC_URL_BASE } from "../../common/config/secrets";
@@ -663,7 +663,7 @@ export class AerodromeMsusdUsdcStrategyOnBase implements StrategyInterface {
     const requiredTVL = reward / targetAPY;
     const deltaLiquidity = requiredTVL - tvlDefillama;
     return {
-      availableLiquidity: Math.max(0, Math.min(deltaLiquidity, this.maxDebt)),
+      availableLiquidity: floorToTwoDecimals(Math.max(0, Math.min(deltaLiquidity, this.maxDebt))),
     };
   }
 
