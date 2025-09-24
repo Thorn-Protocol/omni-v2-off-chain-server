@@ -7,6 +7,7 @@ import { OffChainStrategy__factory } from "../../typechain-types";
 import { ERC20__factory } from "../../typechain-types/factories/ERC20__factory";
 import { sleep } from "../../utils/helper";
 import { INTERVAL_TIME_REBALANCE } from "../../common/config/config";
+import { registry } from "@coral-xyz/anchor/dist/cjs/utils";
 
 export default class OffChainVault {
   name: string;
@@ -184,6 +185,18 @@ export default class OffChainVault {
     return Number(formatUnits(totalAsset, this.tokenDecimal));
   }
 
+  async getRealBalance(): Promise<number> {
+    let realDebt = 0;
+
+    for (let i = 0; i < this.strategies.length; i++) {
+      realDebt += await this.strategies[i].getBalance();
+    }
+
+    realDebt += await this.getBalanceAgent();
+
+    return realDebt;
+  }
+
   /**
    * Withdraw idle funds from the vault to the agent wallet
    * Only withdraws if idle balance is >= 1 USDC
@@ -217,9 +230,12 @@ export default class OffChainVault {
    */
   async rebalanceStrategies() {
     await this.withdrawIdleFunds();
-    let liquidity = await this.getBalanceVault();
+    let liquidity = await this.getRealBalance();
     if (liquidity < 1) return;
+    console.log(" liquidity ", liquidity);
     let newPlan = await this.optimizeLiquidity(liquidity);
+    console.log("new plan", newPlan);
+
     // withdraw from strategy to agent
     for (let i = 0; i < newPlan.data.length; i++) {
       let strategy = newPlan.data[i].strategy;
@@ -260,7 +276,7 @@ export default class OffChainVault {
       }
     }
 
-    await this.report();
+    //await this.report();
   }
 
   /**

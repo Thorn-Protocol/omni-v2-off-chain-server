@@ -76,10 +76,10 @@ async function main() {
     strategies: {
       aedromeMsusdUsdc: { enabled: true, minDebt: 1, maxDebt: 7 },
       aaveV3Usdc: { enabled: true, minDebt: 1, maxDebt: 7 },
-      jupiterLendUsdc: { enabled: false, minDebt: 0, maxDebt: 0 },
+      jupiterLendUsdc: { enabled: true, minDebt: 1, maxDebt: 3 },
     },
   });
 
-  await usdcV2Base_OffChainStrategyOnBase.autoRebalance();
+  await usdcV2Base_OffChainStrategyOnBase.rebalanceStrategies();
 }
 main();

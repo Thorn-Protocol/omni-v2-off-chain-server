@@ -1,5 +1,12 @@
 import { JsonRpcProvider } from "ethers";
-import { isInRoflEnvironmental, RPC_URL_BASE, TEST_V2_AGENT_ED25519_KEY, TEST_V2_AGENT_KEY, USDC_BASE_V2_AGENT_KEY } from "../common/config/secrets";
+import {
+  isInRoflEnvironmental,
+  RPC_URL_BASE,
+  TEST_V2_AGENT_ED25519_KEY,
+  TEST_V2_AGENT_KEY,
+  USDC_BASE_V2_AGENT_ED25519_KEY,
+  USDC_BASE_V2_AGENT_KEY,
+} from "../common/config/secrets";
 import { ethers } from "ethers";
 import { ROFL } from "../services/RoflService/RoflService";
 
@@ -20,7 +27,7 @@ export function getAgentKey(code: "test-v2" | "usdc-base-v2", type: "secp256k1" 
     return USDC_BASE_V2_AGENT_KEY;
   }
   if (code == "usdc-base-v2" && type == "ed25519") {
-    throw Error("Ed25519 key not supported for usdc-base-v2");
+    return USDC_BASE_V2_AGENT_ED25519_KEY;
   }
   if (code == "test-v2" && type == "secp256k1") {
     return TEST_V2_AGENT_KEY;
