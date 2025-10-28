@@ -1,7 +1,11 @@
-.env
-.gitignore
+node_modules
+dist
 .git
-thorn-omnifarming-rofl.default.orc
-/node_modules
-/dist
-/rofl
+.gitignore
+Dockerfile
+compose*.yaml
+.env
+npm-debug.log
+.vscode
+.idea
+*.orc

@@ -1,0 +1,8 @@
+services:
+  omnifarming-rofl:
+    container_name: omnifarming-rofl
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: docker.io/thornprotocol/thorn-omnifarming-rofl:latest
+    platform: linux/amd64

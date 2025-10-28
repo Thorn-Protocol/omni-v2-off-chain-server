@@ -12,9 +12,11 @@ Agent has the function of withdrawing/depositing money, calculating asset alloca
 
 ## ROFL intergrated
 
-Coming soon
+Status: <span style="color: green;">Machine is active and running</span>
 
-## Strategies intergrated
+App ID: `rofl1qqdtlz9wfad4fpyefyrjzs29tmgj2awzf502v0gt`
+
+Explorer: https://explorer.oasis.io/mainnet/sapphire/rofl/app/rofl1qqdtlz9wfad4fpyefyrjzs29tmgj2awzf502v0gt
 
 ### AAVE V3 Finance Strategy
 

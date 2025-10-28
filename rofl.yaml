@@ -1,0 +1,86 @@
+name: thorn-omnifarming-v2
+version: 0.1.0
+tee: tdx
+kind: container
+resources:
+  memory: 4000
+  cpus: 2
+  storage:
+    kind: disk-persistent
+    size: 8000
+artifacts:
+  firmware: https://github.com/oasisprotocol/oasis-boot/releases/download/v0.6.2/ovmf.tdx.fd#db47100a7d6a0c1f6983be224137c3f8d7cb09b63bb1c7a5ee7829d8e994a42f
+  kernel: https://github.com/oasisprotocol/oasis-boot/releases/download/v0.6.2/stage1.bin#e5d4d654ca1fa2c388bf64b23fc6e67815893fc7cb8b7cfee253d87963f54973
+  stage2: https://github.com/oasisprotocol/oasis-boot/releases/download/v0.6.2/stage2-podman.tar.bz2#b2ea2a0ca769b6b2d64e3f0c577ee9c08f0bb81a6e33ed5b15b2a7e50ef9a09f
+  container:
+    runtime: https://github.com/oasisprotocol/oasis-sdk/releases/download/rofl-containers%2Fv0.8.0/rofl-containers#08eb5bbe5df26af276d9a72e9fd7353b3a90b7d27e1cf33e276a82dfd551eec6
+    compose: compose.yaml
+deployments:
+  mainnet:
+    app_id: rofl1qqdtlz9wfad4fpyefyrjzs29tmgj2awzf502v0gt
+    network: mainnet
+    paratime: sapphire
+    admin: devwallet
+    oci_repository: rofl.sh/0465f759-e5f3-4015-a4f5-175ced392252:1761615740
+    trust_root:
+      height: 27042543
+      hash: 67bc35d2a477f5da1873474b4369a3ab620f51ac55c38768d4c8bac379468990
+    policy:
+      quotes:
+        pcs:
+          tcb_validity_period: 30
+          min_tcb_evaluation_data_number: 18
+          tdx: {}
+      enclaves:
+        - id: cuHhkUjDOMf/YWNPXoDI+ULO3sbpgL+Bhm5jNmRZTCgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+        - id: EmNspRmvSSKpcL95mPQMfz5OxGeagYXTG4Ne0z2/OO8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+      endorsements:
+        - any: {}
+      fees: endorsing_node
+      max_expiration: 3
+    secrets:
+      - name: TELEGRAM_BOT_TOKEN
+        value: pGJwa1gghDcR91FoCLgTXNWqXvp5Z4pQ3SYgkzt7wBylAg+tuyNkbmFtZVgi8MO2CTwDpigcJvVGZIJL9kCxc8XVCwwPY0ReWoxM/upBumVub25jZU+d7zO7QcoeN53Pcs9i4LxldmFsdWVYPhMDnHDjNb/IRscdHD7S+QupZEU57FCDHKCvl7fRs+Sivn2e877vYsI2TAXrXpgSJGr5+S3XB9+DnKcXvmTI
+      - name: TELEGRAM_CHAT_ID
+        value: pGJwa1ggJ5k5cuXWQ27DDWqHc+heH5Vakn2vtS5dVE3lhWwariJkbmFtZVgg9UBsFmp/6qeCpGgDguK1BNzWlXFx/u7S9JMlXivoPRhlbm9uY2VPzyr/gKvjnnOTQZT2qpVAZXZhbHVlWBuIsgpGbRSrHxPc3+ePGWgJAKBwE7ooQMO98As=
+      - name: RPC_URL_BASE
+        value: pGJwa1ggn1a25FnIiWdVek/Lwmph+4PKANbJyrRpX1tHIypktA5kbmFtZVgc7AQuKPDI3j0Rbr0l75F+nSlJRqSEjHrpiFLXiGVub25jZU+GmJNyV4dAgMfSwkWaM0tldmFsdWVYWV51eS8LLFnPZ5q19comuKPfHvaAfW1DnzM7W4jSbQdpRA8j+CSAXBQsZSPTBircpeeIn9mYOpev/0CiY6wtcHS5N9GXcGfnccZSvJfXE3VcTD0JKjfmULHV
+    machines:
+      default:
+        provider: oasis1qzc8pldvm8vm3duvdrj63wgvkw34y9ucfcxzetqr
+        offer: large
+        id: 000000000000003e
+  testnet:
+    app_id: rofl1qqdtlz9wfad4fpyefyrjzs29tmgj2awzf502v0gt
+    network: testnet
+    paratime: sapphire
+    admin: devwallet
+    oci_repository: rofl.sh/d765afe4-c0d0-49fc-9504-908424d2a389:1761553825
+    trust_root:
+      height: 29058283
+      hash: 18e1bee3a92ff73e03151e3c974a56a7dd7f7284b6933eee26e2e7fe112b3899
+    policy:
+      quotes:
+        pcs:
+          tcb_validity_period: 30
+          min_tcb_evaluation_data_number: 18
+          tdx: {}
+      enclaves:
+        - id: KOXWK5uAEpNcgQHH6naZnUgJEWvAbpAo+GlZ+dP1OhAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+        - id: 9SIlnamRk0GSEFBFEtx5kF74pUAO3US9T75gAFmACAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+      endorsements:
+        - any: {}
+      fees: endorsing_node
+      max_expiration: 3
+    secrets:
+      - name: TELEGRAM_BOT_TOKEN
+        value: pGJwa1ggEgUjj7L41boX/7VO70LD+A9BgPMZMUy+UUsQs+Httl9kbmFtZVgi+kfOfHIn9l9PmAi/j8GbcRkMVn8v67hsshWvO1QoU4EqS2Vub25jZU81920hHTsPEzTnWVKedDdldmFsdWVYPv0oKGOolW5wEDCtJcXssBwvwZWFJoyFTWIDM8euCf17oAtxp4xzWan4eT/Riu9ci3tqkrEUXQoY7FyMiQ6u
+      - name: TELEGRAM_CHAT_ID
+        value: pGJwa1ggPS8r/Qwy+547Qdj+YPMR0GQESo/ExRwu+3SkU6Wak1hkbmFtZVggrGAbrgUrMn5Mru5cI7274wl6nrj2NEQxPoUo9BQR2txlbm9uY2VPF10owTvFgUEMnsgr8SK5ZXZhbHVlWBuzyyH4UZnCp6LIwmHS8tbqEP5R80ZfDVj5gyU=
+      - name: RPC_URL_BASE
+        value: pGJwa1ggVAfhdSelIiIKa6hUOxH14Z2BsdAZtZgc0NMDFL3QdRxkbmFtZVgcn2ktOkNpiTumas/EkAvwJUKnExBgVJUlM9L0BGVub25jZU8FGoiOh6MiCyNb5CWHGINldmFsdWVYWdmbJYm/pTuRZFs1f3hZ322XeOqSV7blIhKKl+DDcr8mzN69WlUxACOGvJNqH3YFSt+Olk+Yb5pjbEfM/lP1DZDRGwtZ3Nzc4jCc8tDG9xcvKXCw4DUq+j9B
+    machines:
+      default:
+        provider: oasis1qp2ens0hsp7gh23wajxa4hpetkdek3swyyulyrmz
+        offer: playground_short
+        id: 00000000000003a3

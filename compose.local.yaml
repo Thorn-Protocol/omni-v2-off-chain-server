@@ -1,12 +1,11 @@
 services:
   omnifarming-rofl:
+    container_name: omnifarming-rofl
     image: "docker.io/thornprotocol/thorn-omnifarming-rofl:latest"
     platform: linux/amd64
+    env_file: .env
     environment:
       - IS_PRODUCT=true
       - IS_IN_ROFL=true
-      - RPC_URL_BASE=${RPC_URL_BASE}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
     volumes:
       - /run/rofl-appd.sock:/run/rofl-appd.sock

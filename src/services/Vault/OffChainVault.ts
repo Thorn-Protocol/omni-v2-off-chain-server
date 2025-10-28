@@ -38,6 +38,16 @@ export default class OffChainVault {
     this.name = name;
   }
 
+  async getAddressAgentRegistered() {
+    let address = await this.vault.agent();
+    return address;
+  }
+
+  async getAddressAgentController() {
+    let address = await this.agent.getAddress();
+    return address;
+  }
+
   /**
    * Add a new strategy to the vault's strategy list
    * @param strategy - The strategy instance to add
