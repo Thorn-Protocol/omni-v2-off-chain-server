@@ -23,19 +23,20 @@ export function getAgentKey(code: "test-v2" | "usdc-base-v2", type: "secp256k1" 
   if (isInRoflEnvironmental) {
     return ROFL.getKey(code, type);
   }
+  let key: string | undefined;
   if (code == "usdc-base-v2" && type == "secp256k1") {
-    return USDC_BASE_V2_AGENT_KEY;
+    key = USDC_BASE_V2_AGENT_KEY;
+  } else if (code == "usdc-base-v2" && type == "ed25519") {
+    key = USDC_BASE_V2_AGENT_ED25519_KEY;
+  } else if (code == "test-v2" && type == "secp256k1") {
+    key = TEST_V2_AGENT_KEY;
+  } else if (code == "test-v2" && type == "ed25519") {
+    key = TEST_V2_AGENT_ED25519_KEY;
   }
-  if (code == "usdc-base-v2" && type == "ed25519") {
-    return USDC_BASE_V2_AGENT_ED25519_KEY;
+  if (!key) {
+    throw Error(`Agent for code ${code} not found`);
   }
-  if (code == "test-v2" && type == "secp256k1") {
-    return TEST_V2_AGENT_KEY;
-  }
-  if (code == "test-v2" && type == "ed25519") {
-    return TEST_V2_AGENT_ED25519_KEY;
-  }
-  throw Error(`Agent for code ${code} not found`);
+  return key;
 }
 
 export function sleep(ms: number) {
