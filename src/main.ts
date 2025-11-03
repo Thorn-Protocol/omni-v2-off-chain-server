@@ -1,10 +1,6 @@
 import { addresses } from "./common/config/config";
 import {
   RPC_URL_BASE,
-  TEST_EVM_KEY,
-  TEST_SOLANA_KEY,
-  USDC_BASE_V2_AGENT_ED25519_KEY,
-  USDC_BASE_V2_AGENT_KEY,
   isInRoflEnvironmental,
 } from "./common/config/secrets";
 import { AaveV3UsdcStrategyOnBase } from "./services/Strategy/AaveV3UsdcStrategyOnBase";
@@ -94,31 +90,31 @@ async function main() {
     console.log(` ROFL Config: isInRoflEnvironmental: ${isInRoflEnvironmental}`);
   }
 
-  let test_OffChainStrategyOnBase = await setupOffChainStrategy({
-    code: "test-v2",
-    vaultAddress: addresses.test_vault.offChainStrategy,
-    providerUrl: RPC_URL_BASE,
-    name: "offchain strategy for TEST Vault on BASE",
-    strategies: {
-      aedromeMsusdUsdc: { enabled: true, minDebt: 1, maxDebt: 3 },
-      aaveV3Usdc: { enabled: true, minDebt: 1, maxDebt: 100 },
-      jupiterLendUsdc: { enabled: true, minDebt: 2, maxDebt: 3 },
-    },
-  });
-
-  //await test_OffChainStrategyOnBase.autoRebalance();
-
-  // let usdcV2Base_OffChainStrategyOnBase = await setupOffChainStrategy({
-  //   code: "usdc-base-v2",
-  //   vaultAddress: addresses.usdcV2OnBase.offChainStrategy,
+  // let test_OffChainStrategyOnBase = await setupOffChainStrategy({
+  //   code: "test-v2",
+  //   vaultAddress: addresses.test_vault.offChainStrategy,
   //   providerUrl: RPC_URL_BASE,
-  //   name: "offchain strategy for USDC V2 BASE Vault on BASE",
+  //   name: "offchain strategy for TEST Vault on BASE",
   //   strategies: {
   //     aedromeMsusdUsdc: { enabled: true, minDebt: 1, maxDebt: 3 },
   //     aaveV3Usdc: { enabled: true, minDebt: 1, maxDebt: 100 },
-  //     jupiterLendUsdc: { enabled: true, minDebt: 5, maxDebt: 10 },
+  //     jupiterLendUsdc: { enabled: true, minDebt: 2, maxDebt: 3 },
   //   },
   // });
-  // await usdcV2Base_OffChainStrategyOnBase.autoRebalance();
+
+  //await test_OffChainStrategyOnBase.autoRebalance();
+
+  let usdcV2Base_OffChainStrategyOnBase = await setupOffChainStrategy({
+    code: "usdc-base-v2",
+    vaultAddress: addresses.usdcV2OnBase.offChainStrategy,
+    providerUrl: RPC_URL_BASE,
+    name: "offchain strategy for USDC V2 BASE Vault on BASE",
+    strategies: {
+      aedromeMsusdUsdc: { enabled: true, minDebt: 1, maxDebt: 3 },
+      aaveV3Usdc: { enabled: true, minDebt: 1, maxDebt: 100 },
+      jupiterLendUsdc: { enabled: true, minDebt: 5, maxDebt: 10 },
+    },
+  });
+  await usdcV2Base_OffChainStrategyOnBase.autoRebalance();
 }
 main();
