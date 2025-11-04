@@ -6,6 +6,6 @@ services:
     env_file: .env
     environment:
       - IS_PRODUCT=true
-      - IS_IN_ROFL=true
+      - IS_IN_ROFL=false
     volumes:
       - /run/rofl-appd.sock:/run/rofl-appd.sock
