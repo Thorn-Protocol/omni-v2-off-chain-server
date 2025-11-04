@@ -32,17 +32,17 @@ deployments:
           min_tcb_evaluation_data_number: 18
           tdx: {}
       enclaves:
-        - id: cuHhkUjDOMf/YWNPXoDI+ULO3sbpgL+Bhm5jNmRZTCgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
-        - id: EmNspRmvSSKpcL95mPQMfz5OxGeagYXTG4Ne0z2/OO8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+        - id: HzE52VUlHGdOPvW+pj2ag1Jf0xngHAqzyqj94pUZI80AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+        - id: CcOhd2Is4eypLwtY/piNEeMd2McvbuYh31tWKdA7cgYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
       endorsements:
         - any: {}
       fees: endorsing_node
       max_expiration: 3
     secrets:
       - name: TELEGRAM_BOT_TOKEN
-        value: pGJwa1gghDcR91FoCLgTXNWqXvp5Z4pQ3SYgkzt7wBylAg+tuyNkbmFtZVgi8MO2CTwDpigcJvVGZIJL9kCxc8XVCwwPY0ReWoxM/upBumVub25jZU+d7zO7QcoeN53Pcs9i4LxldmFsdWVYPhMDnHDjNb/IRscdHD7S+QupZEU57FCDHKCvl7fRs+Sivn2e877vYsI2TAXrXpgSJGr5+S3XB9+DnKcXvmTI
+        value: pGJwa1ggfyphy5rse+aj78nUguKrICPa84aKSWJ9cqB0qVdF+WNkbmFtZVgiwbU3U7DyBsfuUpmqx8EpGhioGikNO9sVNmwVUrSXwAeL6GVub25jZU+7NMIxlc0ZIfNaStmpM/FldmFsdWVYPqDvivGQScOmj4VL8zFixbzXLGI5E67ZkxO7wli9OB/chkyLA/eMwWb4bSVMajASj9/nDCshQfiENtJJ3uFn
       - name: TELEGRAM_CHAT_ID
-        value: pGJwa1ggJ5k5cuXWQ27DDWqHc+heH5Vakn2vtS5dVE3lhWwariJkbmFtZVgg9UBsFmp/6qeCpGgDguK1BNzWlXFx/u7S9JMlXivoPRhlbm9uY2VPzyr/gKvjnnOTQZT2qpVAZXZhbHVlWBuIsgpGbRSrHxPc3+ePGWgJAKBwE7ooQMO98As=
+        value: pGJwa1gg9yulDBcSdlYV/Nkmsqyttb09mL4ixqI1wik2pZ4epSxkbmFtZVggfW5KdAHCF/n3FuHx6+bj7vvGWCtPu/qICfFzFqbpcDNlbm9uY2VPkdcvOMKYLlc9DQmxW1oxZXZhbHVlWB6f0wbI2XhAp0XFxISk5P0EJe0r+g+EK6BOqPW+phk=
       - name: RPC_URL_BASE
         value: pGJwa1ggn1a25FnIiWdVek/Lwmph+4PKANbJyrRpX1tHIypktA5kbmFtZVgc7AQuKPDI3j0Rbr0l75F+nSlJRqSEjHrpiFLXiGVub25jZU+GmJNyV4dAgMfSwkWaM0tldmFsdWVYWV51eS8LLFnPZ5q19comuKPfHvaAfW1DnzM7W4jSbQdpRA8j+CSAXBQsZSPTBircpeeIn9mYOpev/0CiY6wtcHS5N9GXcGfnccZSvJfXE3VcTD0JKjfmULHV
     machines:
