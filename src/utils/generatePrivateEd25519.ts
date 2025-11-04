@@ -25,8 +25,6 @@ export function generateSolanaKeypair() {
   // Convert secret key to hex format (optional)
   const secretKeyHex = Buffer.from(secretKey).toString("hex");
 
-  console.log(secretKeyBase58);
-
   return {
     keypair, // Original Keypair object (can be used directly as signer)
     publicKey, // Base58 string
