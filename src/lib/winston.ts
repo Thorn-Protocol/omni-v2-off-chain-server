@@ -13,5 +13,9 @@ let option: TelegramLogger.Options = {
   chatId: Number(TELEGRAM_CHAT_ID),
 };
 
-logger.add(new TelegramLogger(option));
+const telegramTransport = new TelegramLogger(option);
+telegramTransport.setMaxListeners(20);
+
+logger.add(telegramTransport);
+
 export default logger;
