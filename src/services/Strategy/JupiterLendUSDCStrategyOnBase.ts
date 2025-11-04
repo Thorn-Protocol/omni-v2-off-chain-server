@@ -15,6 +15,7 @@ import BN from "bn.js";
 import { AnchorProvider, Program, Wallet as WalletAnchor } from "@coral-xyz/anchor";
 import { getDepositPda, intToU8Array32 } from "@across-protocol/contracts/dist/src/svm/web3-v1";
 import { MIN_DEPOSIT_WITHDRAW } from "../../common/config/config";
+import nacl from "tweetnacl";
 
 // Constants
 const APY_CACHE_DURATION = 300; // 5 minutes
@@ -97,7 +98,9 @@ export class JupiterLendingUSDCOnBase implements StrategyInterface {
     this.maxDebt = maxDebt;
     this.provider = new JsonRpcProvider(RPC_URL_BASE);
     this.wallet = new Wallet(privateKey, this.provider);
-    this.walletSolana = Keypair.fromSecretKey(bs58.decode(privateKeySolana));
+    const seed = Uint8Array.from(Buffer.from(privateKeySolana, "hex"));
+    const full = nacl.sign.keyPair.fromSeed(seed);
+    this.walletSolana = Keypair.fromSecretKey(full.secretKey);
     logger.info(`${this.name}: Constructor initialized with Solana agent: ${this.walletSolana.publicKey}`);
   }
 
