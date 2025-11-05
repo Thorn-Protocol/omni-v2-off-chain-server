@@ -49,4 +49,4 @@ Use the Across bridge via API to transfer funds between the Base and Solana netw
 | [Wasabi Finance](https://wasabi.xyz/)           | Yield preps                    | ❌         | ❌              |
 | [AAVE V3 Finance](https://aave.com/)            | Yield lending                  | ✅         | ✅              |
 | [Aerodrome Finance](https://aerodrome.finance/) | msUSD - USDC liquidiy Strategy | ✅         | ✅              |
-| [Jupiter Lending](https://jup.ag/lend/earn)     | USDC Vault                     | ✅         | ❌              |
+| [Jupiter Lending](https://jup.ag/lend/earn)     | USDC Vault                     | ✅         | ✅              |
