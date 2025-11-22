@@ -1,6 +1,7 @@
 // src/services/Vault/VaultV2Service.ts
 import { JsonRpcProvider, Wallet } from "ethers";
-import { VaultV2__factory, VaultV2 } from "../../typechain-types";
+import type { VaultV2 } from "../../typechain-types/VaultV2";
+import { VaultV2__factory } from "../../typechain-types/factories/VaultV2__factory";
 import logger from "../../lib/winston";
 import { INTERVAL_TIME_REBALANCE } from "../../common/config/config";
 import { Mutex } from "async-mutex";
