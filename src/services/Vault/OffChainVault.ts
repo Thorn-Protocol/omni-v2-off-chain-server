@@ -284,8 +284,6 @@ export default class OffChainVault {
         remainLiquidity = await this.getBalanceAgent();
       }
     }
-
-    await this.report();
   }
 
   /**
