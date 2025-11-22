@@ -8,6 +8,7 @@ import { AerodromeMsusdUsdcStrategyOnBase } from "./services/Strategy/AerodromeM
 import { JupiterLendingUSDCOnBase } from "./services/Strategy/JupiterLendUSDCStrategyOnBase";
 
 import OffChainVault from "./services/Vault/OffChainVault";
+import VaultV2 from "./services/Vault/VaultV2";
 import { getAgentKey } from "./utils/helper";
 
 interface SetupOffChainStrategyProps {
@@ -32,6 +33,12 @@ interface SetupOffChainStrategyProps {
       maxDebt: number;
     };
   };
+}
+
+interface SetupVaultV2Props {
+  code: "test-v2" | "usdc-base-v2";
+  vaultAddress: string;
+  providerUrl: string;
 }
 
 async function setupOffChainStrategy({
@@ -85,6 +92,16 @@ async function setupOffChainStrategy({
   return offChainStrategy;
 }
 
+async function setupVaultV2({
+  code,
+  vaultAddress,
+  providerUrl,
+}: SetupVaultV2Props) {
+  const secp256k1Key = await getAgentKey(code, "secp256k1");
+  const vaultV2 = new VaultV2(vaultAddress, secp256k1Key, providerUrl);
+  return vaultV2;
+}
+
 async function main() {
   if (isInRoflEnvironmental) {
     console.log(` ROFL Config: isInRoflEnvironmental: ${isInRoflEnvironmental}`);
@@ -115,6 +132,19 @@ async function main() {
       jupiterLendUsdc: { enabled: true, minDebt: 5, maxDebt: 10 },
     },
   });
+
+  const usdcV2Base_VaultV2 = await setupVaultV2({
+    code: "usdc-base-v2",
+    vaultAddress: addresses.usdcV2OnBase.vault,
+    providerUrl: RPC_URL_BASE,
+  });
+  
   await usdcV2Base_OffChainStrategyOnBase.autoRebalance();
+
+  await usdcV2Base_VaultV2.autoProcessReports([
+    addresses.usdcV2OnBase.offChainStrategy,
+    addresses.usdcV2OnBase.strategy.wasabi,
+  ]);
+
 }
 main();
