@@ -285,7 +285,7 @@ export default class OffChainVault {
       }
     }
 
-    //await this.report();
+    await this.report();
   }
 
   /**
