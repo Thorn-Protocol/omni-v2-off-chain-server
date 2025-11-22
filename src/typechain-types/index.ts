@@ -28,3 +28,5 @@ export type { AerodromeSlipstreamQuoter } from "./AerodromeSlip/AerodromeSlipstr
 export { AerodromeSlipstreamQuoter__factory } from "./factories/AerodromeSlip/AerodromeSlipstreamQuoter__factory";
 export type { OffChainStrategy } from "./OffchainStrategy/OffChainStrategy";
 export { OffChainStrategy__factory } from "./factories/OffchainStrategy/OffChainStrategy__factory";
+export type {VaultV2} from "./VaultV2";
+export {VaultV2__factory} from "./factories/VaultV2__factory";
