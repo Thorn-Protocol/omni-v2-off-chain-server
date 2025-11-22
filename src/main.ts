@@ -1,8 +1,10 @@
-import { addresses } from "./common/config/config";
+import { Mutex } from "async-mutex";
+import { addresses, INTERVAL_TIME_REBALANCE } from "./common/config/config";
 import {
   RPC_URL_BASE,
   isInRoflEnvironmental,
 } from "./common/config/secrets";
+import logger from "./lib/winston";
 import { AaveV3UsdcStrategyOnBase } from "./services/Strategy/AaveV3UsdcStrategyOnBase";
 import { AerodromeMsusdUsdcStrategyOnBase } from "./services/Strategy/AerodromeMsusdUsdcStrategyOnBase";
 import { JupiterLendingUSDCOnBase } from "./services/Strategy/JupiterLendUSDCStrategyOnBase";
@@ -139,12 +141,26 @@ async function main() {
     providerUrl: RPC_URL_BASE,
   });
   
-  await usdcV2Base_OffChainStrategyOnBase.autoRebalance();
+  const globalMutex = new Mutex();
 
-  await usdcV2Base_VaultV2.autoProcessReports([
-    addresses.usdcV2OnBase.offChainStrategy,
-    addresses.usdcV2OnBase.strategy.wasabi,
-  ]);
+  setInterval(async () => {
+    if (globalMutex.isLocked()) return;
+
+    await globalMutex.runExclusive(async () => {
+      try {
+        await usdcV2Base_OffChainStrategyOnBase.rebalanceStrategies();
+
+        await usdcV2Base_OffChainStrategyOnBase.report();
+
+        await usdcV2Base_VaultV2.runProcessReports([
+          addresses.usdcV2OnBase.strategy.wasabi, 
+          addresses.usdcV2OnBase.offChainStrategy     
+        ]);
+      } catch (e) {
+        logger.error(`global cron error: ${e}`);
+      }
+    });
+  }, INTERVAL_TIME_REBALANCE);
 
 }
 main();
