@@ -34,25 +34,17 @@ export default class VaultV2Service {
     }
   }
 
-  async autoProcessReports(strategyAddresses: string[]) {
-    setInterval(async () => {
-      if (!this.mutex.isLocked()) {
+  async runProcessReports(strategyAddresses: string[]) {
+    await this.mutex.runExclusive(async () => {
+      for (const addr of strategyAddresses) {
         try {
-          await this.mutex.runExclusive(async () => {
-            for (const addr of strategyAddresses) {
-              try {
-                await this.processReport(addr);
-              } catch (e) {
-                logger.error(
-                  `autoProcessReports: error when processing ${addr}: ${e}`
-                );
-              }
-            }
-          });
+          await this.processReport(addr);
         } catch (e) {
-          logger.error(`VaultV2 autoProcessReports mutex error: ${e}`);
+          logger.error(
+            `runProcessReports: error when processing ${addr}: ${e}`
+          );
         }
       }
-    }, INTERVAL_TIME_REBALANCE);
+    });
   }
 }
